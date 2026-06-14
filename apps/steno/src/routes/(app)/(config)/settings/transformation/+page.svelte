@@ -4,6 +4,7 @@
 	import * as Field from '@steno/ui/field';
 	import { Input } from '@steno/ui/input';
 	import * as Select from '@steno/ui/select';
+	import { Switch } from '@steno/ui/switch';
 	import { Textarea } from '@steno/ui/textarea';
 	import { invoke } from '@tauri-apps/api/core';
 	import { isErr } from 'wellcrafted/result';
@@ -112,6 +113,26 @@
 			</Select.Root>
 		</Field.Field>
 
+		<Field.Separator />
+
+		<Field.Field orientation="horizontal">
+			<Switch
+				id="completion-enable-thinking"
+				bind:checked={
+					() => settings.value['completion.enableThinking'],
+					(v) => settings.updateKey('completion.enableThinking', v)
+				}
+			/>
+			<Field.Content>
+				<Field.Label for="completion-enable-thinking">Reasoning</Field.Label>
+				<Field.Description>
+					Let the model think before answering. Off is recommended —
+					transforms like grammar fixes don't need it, and turning it on can
+					make each transform several times slower.
+				</Field.Description>
+			</Field.Content>
+		</Field.Field>
+
 		{#if provider === 'llamacpp'}
 			<Field.Separator />
 
@@ -174,8 +195,9 @@
 				</Field.Label>
 				<Field.Description>
 					{#if bundledServer}
-						A llama-server binary ships with the app — no setup needed. Set a
-						path only to override it.
+						A llama-server binary ships with the app — no setup needed. It
+						prefers your GPU (Vulkan/Metal) and falls back to CPU
+						automatically. Set a path only to override it.
 					{:else}
 						No bundled binary detected. Set an absolute path to a prebuilt
 						<code class="bg-muted rounded px-1">llama-server</code> (from a llama.cpp

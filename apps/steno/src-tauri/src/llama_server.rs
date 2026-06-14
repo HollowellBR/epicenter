@@ -53,31 +53,53 @@ impl Default for LlamaServerState {
     }
 }
 
-/// Resolve the llama-server binary to run.
-///
-/// An explicit user-provided path wins; otherwise we fall back to the binary
-/// bundled with the app under `binaries/` (Tauri resource), so the backend is
-/// zero-setup when a binary ships with the app.
-fn resolve_server_binary(app: &AppHandle, explicit: &str) -> Option<String> {
-    if !explicit.is_empty() && std::path::Path::new(explicit).exists() {
-        return Some(explicit.to_string());
-    }
-    let name = if cfg!(target_os = "windows") {
-        "binaries/llama-server.exe"
+/// Bundled backend variants, in the order we try them at startup. The first is
+/// preferred (GPU); later ones are fallbacks. `vulkan` is vendor-agnostic
+/// (NVIDIA/AMD/Intel) and `metal` is the universal macOS build; both fall back
+/// to CPU internally, and a separate `cpu` build is the guaranteed last resort
+/// when the GPU backend can't load (missing loader) or fails (driver/OOM crash).
+const BUNDLED_VARIANTS: &[&str] = &["vulkan", "metal", "cpu"];
+
+fn server_binary_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "llama-server.exe"
     } else {
-        "binaries/llama-server"
-    };
-    match app.path().resolve(name, BaseDirectory::Resource) {
-        Ok(path) if path.exists() => Some(path.to_string_lossy().into_owned()),
-        _ => None,
+        "llama-server"
     }
 }
 
-/// Return the path to the bundled llama-server binary, if one ships with the app.
-/// Used by the settings UI to show whether the backend is ready out of the box.
+/// Resolve the ordered list of `(variant, path)` llama-server candidates to try.
+///
+/// An explicit user-provided path wins and is the only candidate. Otherwise we
+/// collect every bundled `binaries/<variant>/llama-server` that ships with the
+/// app (Tauri resource), in `BUNDLED_VARIANTS` preference order, so startup can
+/// try the GPU build first and fall back to CPU. Zero-setup when binaries ship.
+fn resolve_server_candidates(app: &AppHandle, explicit: &str) -> Vec<(String, String)> {
+    if !explicit.is_empty() && std::path::Path::new(explicit).exists() {
+        return vec![("custom".to_string(), explicit.to_string())];
+    }
+    let name = server_binary_name();
+    let mut out = Vec::new();
+    for variant in BUNDLED_VARIANTS {
+        let rel = format!("binaries/{variant}/{name}");
+        if let Ok(path) = app.path().resolve(&rel, BaseDirectory::Resource) {
+            if path.exists() {
+                out.push(((*variant).to_string(), path.to_string_lossy().into_owned()));
+            }
+        }
+    }
+    out
+}
+
+/// Return the path to the preferred bundled llama-server binary, if one ships
+/// with the app. Used by the settings UI to show whether the backend is ready
+/// out of the box.
 #[tauri::command]
 pub async fn resolve_bundled_llama_server(app: AppHandle) -> Result<Option<String>, String> {
-    Ok(resolve_server_binary(&app, ""))
+    Ok(resolve_server_candidates(&app, "")
+        .into_iter()
+        .next()
+        .map(|(_, path)| path))
 }
 
 /// Start (or reuse) the llama-server sidecar for the given model.
@@ -108,13 +130,15 @@ pub async fn start_llama_server(
         }
     }
 
-    // Resolve the binary (explicit path wins, else the bundled one). Do this
-    // before stopping any running server so a misconfiguration is non-destructive.
-    let server_path = resolve_server_binary(&app, &server_path).ok_or_else(|| {
-        "No llama-server binary is available. Ship a prebuilt llama-server with the app, \
-         or set its path in Settings \u{2192} Transformation."
-            .to_string()
-    })?;
+    // Resolve the ordered candidate list (explicit path wins, else bundled
+    // GPU-then-CPU). Do this before stopping any running server so a
+    // misconfiguration is non-destructive.
+    let candidates = resolve_server_candidates(&app, &server_path);
+    if candidates.is_empty() {
+        return Err("No llama-server binary is available. Ship a prebuilt llama-server with the app, \
+             or set its path in Settings \u{2192} Transformation."
+            .to_string());
+    }
 
     // Stop any existing server before starting a new one.
     let mut old_child = {
@@ -127,18 +151,62 @@ pub async fn start_llama_server(
     }
 
     let ctx_size = ctx_size.unwrap_or(4096);
-    // Offload all layers when a GPU backend is present; llama.cpp falls back to
-    // CPU automatically if it cannot.
+    // Offload all layers when a GPU backend is present; the CPU fallback build
+    // ignores this, and a GPU build that can't load falls back internally.
     let n_gpu_layers = n_gpu_layers.unwrap_or(99);
 
-    info!(
-        "[LlamaServer] Starting: {} -m {} --port {} -c {} -ngl {}",
-        server_path, model_path, port, ctx_size, n_gpu_layers
-    );
+    // Try each candidate in order; the first that becomes healthy wins. A GPU
+    // build that crashes (missing loader, bad driver, VRAM OOM) exits early and
+    // we fall through to the next — typically the bundled CPU build.
+    let mut errors: Vec<String> = Vec::new();
+    for (variant, path) in &candidates {
+        info!(
+            "[LlamaServer] Starting ({}): {} -m {} --port {} -c {} -ngl {}",
+            variant, path, model_path, port, ctx_size, n_gpu_layers
+        );
+        match spawn_and_wait_health(path, &model_path, port, ctx_size, n_gpu_layers).await {
+            Ok(child) => {
+                let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+                inner.child = Some(child);
+                inner.model_path = Some(model_path.clone());
+                inner.port = port;
+                inner.status = LlamaServerStatus::Running;
+                info!("[LlamaServer] Ready on port {} (backend: {})", port, variant);
+                return Ok(());
+            }
+            Err(e) => {
+                error!("[LlamaServer] Backend {} failed: {}", variant, e);
+                errors.push(format!("{}: {}", variant, e));
+            }
+        }
+    }
 
-    let mut child = Command::new(&server_path)
+    {
+        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.status = LlamaServerStatus::Error;
+    }
+    Err(format!(
+        "All llama-server backends failed to start on port {}:\n{}",
+        port,
+        errors.join("\n")
+    ))
+}
+
+/// Spawn one llama-server binary and block until its `/health` endpoint reports
+/// ready, returning the live `Child` on success. The child's stdout/stderr are
+/// drained to the app log. If the process exits early (e.g. a GPU backend that
+/// can't initialize) or never becomes healthy within the budget, it is killed
+/// and an error returned so the caller can try the next candidate.
+async fn spawn_and_wait_health(
+    server_path: &str,
+    model_path: &str,
+    port: u16,
+    ctx_size: u32,
+    n_gpu_layers: i32,
+) -> Result<Child, String> {
+    let mut child = Command::new(server_path)
         .arg("-m")
-        .arg(&model_path)
+        .arg(model_path)
         .arg("--host")
         .arg("127.0.0.1")
         .arg("--port")
@@ -174,21 +242,19 @@ pub async fn start_llama_server(
         });
     }
 
-    // Record the running child before awaiting health so stop_llama_server works.
-    {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-        inner.child = Some(child);
-        inner.model_path = Some(model_path.clone());
-        inner.port = port;
-        inner.status = LlamaServerStatus::Stopped; // not ready until health passes
-    }
-
-    // Poll /health until ready (or timeout). Model load dominates this.
+    // Poll /health until ready (or timeout). Model load dominates this. Bail out
+    // immediately if the process dies so we fall back to the next candidate fast.
     let health_url = format!("http://127.0.0.1:{}/health", port);
     let client = reqwest::Client::new();
-    let mut ready = false;
     for _ in 0..120 {
         // ~60s budget
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return Err(format!("process exited early with {}", status));
+            }
+            Ok(None) => {}
+            Err(e) => return Err(format!("failed to poll process: {}", e)),
+        }
         if let Ok(resp) = client
             .get(&health_url)
             .timeout(Duration::from_secs(2))
@@ -196,36 +262,14 @@ pub async fn start_llama_server(
             .await
         {
             if resp.status().is_success() {
-                ready = true;
-                break;
+                return Ok(child);
             }
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
 
-    if !ready {
-        // Tear down the half-started server.
-        let mut child = {
-            let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-            inner.status = LlamaServerStatus::Error;
-            inner.child.take()
-        };
-        if let Some(ref mut child) = child {
-            let _ = child.kill().await;
-        }
-        error!("[LlamaServer] Timed out waiting for /health on port {}", port);
-        return Err(format!(
-            "llama-server did not become ready on port {} within 60s",
-            port
-        ));
-    }
-
-    {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-        inner.status = LlamaServerStatus::Running;
-    }
-    info!("[LlamaServer] Ready on port {}", port);
-    Ok(())
+    let _ = child.kill().await;
+    Err(format!("did not become ready on port {} within 60s", port))
 }
 
 /// Stop the llama-server sidecar if running.

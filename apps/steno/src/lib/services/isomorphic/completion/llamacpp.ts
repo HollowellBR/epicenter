@@ -8,6 +8,11 @@ interface LlamaCppCompleteParams {
 	model: string;
 	systemPrompt: string;
 	userPrompt: string;
+	/** Allow the model to emit reasoning tokens before answering. Default false:
+	 *  disabling it cut a grammar-fix from ~12s/553 tokens to ~2s/15 tokens with
+	 *  identical output on Qwen3-8B. Maps to the chat template's `enable_thinking`
+	 *  flag; unknown to non-Qwen templates, which simply ignore it. */
+	enableThinking?: boolean;
 }
 
 interface OpenAiChatResponse {
@@ -28,6 +33,7 @@ export const LlamaCppCompletionServiceLive = {
 		model,
 		systemPrompt,
 		userPrompt,
+		enableThinking = false,
 	}: LlamaCppCompleteParams): Promise<Result<string, string>> {
 		const url = `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
 
@@ -43,6 +49,8 @@ export const LlamaCppCompletionServiceLive = {
 							{ role: 'user', content: userPrompt },
 						],
 						stream: false,
+						// Passed to the Jinja chat template (server runs with --jinja).
+						chat_template_kwargs: { enable_thinking: enableThinking },
 					}),
 				});
 

@@ -223,6 +223,7 @@ async function handleStep({
 					model: settings.value['llamacpp.model'],
 					systemPrompt,
 					userPrompt,
+					enableThinking: settings.value['completion.enableThinking'],
 				});
 			}
 
@@ -239,6 +240,7 @@ async function handleStep({
 				model,
 				systemPrompt,
 				userPrompt,
+				enableThinking: settings.value['completion.enableThinking'],
 			});
 		}
 

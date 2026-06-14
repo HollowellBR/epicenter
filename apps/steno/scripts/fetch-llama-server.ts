@@ -1,15 +1,22 @@
 /**
- * Fetches the prebuilt llama.cpp `llama-server` binary for the current platform
- * and installs it (plus its shared libraries) into `src-tauri/binaries/`, where
- * `tauri.conf.json` bundles it as a resource and `src/llama_server.rs` resolves
- * it at runtime.
+ * Fetches the prebuilt llama.cpp `llama-server` binary (or binaries) for the
+ * current platform and installs each into a per-variant subdirectory under
+ * `src-tauri/binaries/<variant>/`, where `tauri.conf.json` bundles them as
+ * resources and `src/llama_server.rs` resolves them at runtime.
+ *
+ * Multiple variants are fetched so the app can prefer a GPU build and fall back
+ * to CPU at runtime (see `llama_server.rs::resolve_server_candidates`):
+ *   - Windows/Linux: `vulkan` (GPU, vendor-agnostic) + `cpu` (guaranteed fallback)
+ *   - macOS:         the universal `metal` build (GPU + CPU fallback built in)
  *
  * Runs automatically before `tauri build` (see `beforeBuildCommand`), and can be
  * run manually: `bun run fetch-llama-server` (add `--force` to re-download).
  *
  * Env overrides:
  *   LLAMA_CPP_RELEASE  release tag to fetch (default: "latest"), e.g. "b9585"
- *   LLAMA_CPP_VARIANT  build variant (default: "cpu"), e.g. "cuda-12.4", "vulkan"
+ *   LLAMA_CPP_VARIANT  comma-separated variant list, overrides the per-platform
+ *                      default (e.g. "vulkan,cpu", "cuda-12.4", "cpu"). Ignored
+ *                      on macOS, which only ships a single universal build.
  *   GITHUB_TOKEN       optional, raises GitHub API rate limits in CI
  */
 
@@ -28,8 +35,17 @@ import { join, resolve } from 'node:path';
 
 const REPO = 'ggml-org/llama.cpp';
 const RELEASE = process.env.LLAMA_CPP_RELEASE ?? 'latest';
-const VARIANT = process.env.LLAMA_CPP_VARIANT ?? 'cpu';
 const FORCE = process.argv.includes('--force');
+
+// macOS ships one universal build (Metal + CPU). Windows/Linux get a GPU build
+// (Vulkan: works on NVIDIA/AMD/Intel) plus a plain CPU build as a safe fallback.
+const VARIANTS: string[] =
+	process.platform === 'darwin'
+		? ['metal']
+		: (process.env.LLAMA_CPP_VARIANT
+				?.split(',')
+				.map((s) => s.trim())
+				.filter(Boolean) ?? ['vulkan', 'cpu']);
 
 const BINARIES_DIR = resolve(import.meta.dir, '../src-tauri/binaries');
 const isWindows = process.platform === 'win32';
@@ -40,18 +56,18 @@ function log(msg: string) {
 }
 
 /** Build a regex that matches the release asset for this platform/arch/variant. */
-function assetPattern(): RegExp {
+function assetPattern(variant: string): RegExp {
 	const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
 	switch (process.platform) {
 		case 'win32':
-			// e.g. llama-b9585-bin-win-cpu-x64.zip
-			return new RegExp(`bin-win-${VARIANT}-${arch}\\.zip$`);
+			// e.g. llama-b9585-bin-win-vulkan-x64.zip
+			return new RegExp(`bin-win-${variant}-${arch}\\.zip$`);
 		case 'darwin':
 			// e.g. llama-b9585-bin-macos-arm64.tar.gz (Metal included; no variant)
 			return new RegExp(`bin-macos-${arch}\\.tar\\.gz$`);
 		case 'linux': {
 			// CPU build has no variant segment: llama-...-bin-ubuntu-x64.tar.gz
-			const seg = VARIANT && VARIANT !== 'cpu' ? `${VARIANT}-` : '';
+			const seg = variant && variant !== 'cpu' ? `${variant}-` : '';
 			return new RegExp(`bin-ubuntu-${seg}${arch}\\.tar\\.gz$`);
 		}
 		default:
@@ -89,33 +105,28 @@ function findServerDir(root: string): string | null {
 	return null;
 }
 
-async function main() {
-	if (existsSync(join(BINARIES_DIR, serverName)) && !FORCE) {
-		log(`${serverName} already present in src-tauri/binaries — skipping (use --force to re-download).`);
+type Asset = { name: string; browser_download_url: string };
+
+/** Download, extract, prune, and install one variant into `binaries/<variant>/`. */
+async function installVariant(release: any, tag: string, variant: string) {
+	const destDir = join(BINARIES_DIR, variant);
+	if (existsSync(join(destDir, serverName)) && !FORCE) {
+		log(`${variant}/${serverName} already present — skipping (use --force to re-download).`);
 		return;
 	}
 
-	log(`platform=${process.platform} arch=${process.arch} variant=${VARIANT} release=${RELEASE}`);
-
-	const release =
-		RELEASE === 'latest'
-			? await gh('/releases/latest')
-			: await gh(`/releases/tags/${RELEASE}`);
-	const tag: string = release.tag_name;
-	const pattern = assetPattern();
-	const asset = (release.assets as { name: string; browser_download_url: string }[]).find(
-		(a) => pattern.test(a.name),
-	);
-
+	const pattern = assetPattern(variant);
+	const asset = (release.assets as Asset[]).find((a) => pattern.test(a.name));
 	if (!asset) {
-		const names = (release.assets as { name: string }[]).map((a) => a.name).join('\n  ');
+		const names = (release.assets as Asset[]).map((a) => a.name).join('\n  ');
 		throw new Error(
-			`No asset matching ${pattern} in release ${tag}. Available assets:\n  ${names}\n` +
-				`Try setting LLAMA_CPP_VARIANT (e.g. "vulkan", "cuda-12.4").`,
+			`No asset matching ${pattern} for variant "${variant}" in release ${tag}. ` +
+				`Available assets:\n  ${names}\n` +
+				`Adjust LLAMA_CPP_VARIANT (e.g. "vulkan,cpu", "cuda-12.4").`,
 		);
 	}
 
-	log(`downloading ${asset.name} (release ${tag})`);
+	log(`downloading ${asset.name} (variant ${variant}, release ${tag})`);
 	const tmp = mkdtempSync(join(tmpdir(), 'llama-server-'));
 	const archivePath = join(tmp, asset.name);
 
@@ -157,16 +168,9 @@ async function main() {
 			throw new Error(`Could not find ${serverName} inside ${asset.name}`);
 		}
 
-		mkdirSync(BINARIES_DIR, { recursive: true });
-
-		// Clean previously-installed binaries/libs (keep tracked docs) so
-		// re-downloads don't leave stale files behind.
-		const KEEP = new Set(['.gitignore', 'README.md']);
-		for (const entry of readdirSync(BINARIES_DIR, { withFileTypes: true })) {
-			if (entry.isFile() && !KEEP.has(entry.name)) {
-				rmSync(join(BINARIES_DIR, entry.name), { force: true });
-			}
-		}
+		// Fresh per-variant dir so re-downloads don't leave stale files behind.
+		rmSync(destDir, { recursive: true, force: true });
+		mkdirSync(destDir, { recursive: true });
 
 		// Install only the server binary + shared libraries it links against.
 		// The release also ships other CLI tools (llama-cli, llama-bench, …) which
@@ -177,7 +181,7 @@ async function main() {
 		for (const entry of readdirSync(serverDir, { withFileTypes: true })) {
 			if (!entry.isFile()) continue;
 			if (entry.name !== serverName && !isLib(entry.name)) continue;
-			const dest = join(BINARIES_DIR, entry.name);
+			const dest = join(destDir, entry.name);
 			cpSync(join(serverDir, entry.name), dest);
 			totalBytes += statSync(dest).size;
 			if (entry.name === serverName) {
@@ -187,14 +191,45 @@ async function main() {
 			}
 		}
 
-		if (!existsSync(join(BINARIES_DIR, serverName))) {
-			throw new Error(`Install incomplete: ${serverName} was not copied.`);
+		if (!existsSync(join(destDir, serverName))) {
+			throw new Error(`Install incomplete: ${variant}/${serverName} was not copied.`);
 		}
 		log(
-			`installed ${serverName} + ${libCount} libs (${(totalBytes / 1_048_576).toFixed(1)} MB) into src-tauri/binaries`,
+			`installed ${variant}/${serverName} + ${libCount} libs (${(totalBytes / 1_048_576).toFixed(1)} MB) into src-tauri/binaries/${variant}`,
 		);
 	} finally {
 		rmSync(tmp, { recursive: true, force: true });
+	}
+}
+
+/** Remove a stale flat install (top-level binaries/*.dll, *.exe) from before the
+ *  per-variant layout. Keeps tracked docs and the variant subdirectories. */
+function cleanLegacyFlatInstall() {
+	if (!existsSync(BINARIES_DIR)) return;
+	const KEEP = new Set(['.gitignore', 'README.md']);
+	for (const entry of readdirSync(BINARIES_DIR, { withFileTypes: true })) {
+		if (entry.isFile() && !KEEP.has(entry.name)) {
+			rmSync(join(BINARIES_DIR, entry.name), { force: true });
+		}
+	}
+}
+
+async function main() {
+	log(
+		`platform=${process.platform} arch=${process.arch} variants=${VARIANTS.join(',')} release=${RELEASE}`,
+	);
+
+	mkdirSync(BINARIES_DIR, { recursive: true });
+	cleanLegacyFlatInstall();
+
+	const release =
+		RELEASE === 'latest'
+			? await gh('/releases/latest')
+			: await gh(`/releases/tags/${RELEASE}`);
+	const tag: string = release.tag_name;
+
+	for (const variant of VARIANTS) {
+		await installVariant(release, tag, variant);
 	}
 }
 

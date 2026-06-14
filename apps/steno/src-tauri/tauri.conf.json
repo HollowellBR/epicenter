@@ -9,7 +9,7 @@
 		"active": true,
 		"resources": [
 			"recorder-state-icons/*",
-			"binaries/*"
+			"binaries/*/*"
 		],
 		"category": "Productivity",
 		"publisher": "Braden Wong",

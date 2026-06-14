@@ -47,7 +47,7 @@ Research (Open ASR Leaderboard 2026 + 2026 local-LLM landscape) drove four decis
 1. **Ship the llama-server binary in CI/release** — `beforeBuildCommand` runs `fetch-llama-server` automatically, but confirm a real `tauri build` bundles + resolves it on each target. (Local dev resolution of the bundled resource is unconfirmed; the Settings page shows detection and falls back to a user-set path.)
 2. **Run the macOS/Linux branch of `fetch-llama-server`** (tar / `bin-macos-*` / `bin-ubuntu-x64`) — only the Windows path is exercised so far.
 3. **Runtime end-to-end checks in the GUI**: (a) transcription returns text with the FP32 v2 model; (b) a transform downloads Qwen3, spawns llama-server, and returns text; (c) Ollama fallback still works.
-4. **Optional**: GPU llama-server variant for default (Vulkan), and mirroring the Parakeet FP32 ONNX on EpicenterHQ releases for bandwidth.
+4. **Optional**: ✅ GPU llama-server variant (Vulkan) as default with CPU fallback — see "Follow-up: GPU llama-server variant" below. ⬜ Mirroring the Parakeet FP32 ONNX on EpicenterHQ releases for bandwidth (still open; blocked by GitHub's 2 GB per-asset limit vs the 2.44 GB encoder data file — needs object storage, not a GitHub release).
 
 ---
 
@@ -71,5 +71,53 @@ Confirmed live in `bun run dev`: app builds + launches; **both models fully down
 ### Known constraint: dev vs prod data dir
 Dev (`bun run dev`) uses identifier **`io.steno.app.dev`**; a production `tauri build` uses **`io.steno.app`** — **separate** app-data folders. So models/settings don't carry over automatically. To keep everything when moving to an installed app: `bun tauri build` → install (don't launch) → `bun run migrate-dev-data` → launch. (Run migration before the first prod launch, or its localStorage seeds defaults and won't read the migrated `settings.json`.)
 
-### Still pending (runtime, GUI)
-Actual transcription/transform inference still to confirm end-to-end: (a) transcript returned from the FP32 v2 model; (b) a transform spawns llama-server and returns text; (c) Ollama fallback. Models are downloaded, so these are testable now.
+### Runtime inference — VERIFIED end-to-end (2026-06-14)
+Engine-level end-to-end test against the real downloaded models (GUI window automation of a native Tauri app is impractical, so the actual inference engines were exercised directly with the real model files; the button→invoke→display wiring is the only unverified remainder and is low-risk):
+- ✅ **(a) Transcription** — `cargo run --release --bin transcribe` on a TTS-generated WAV, against the FP32 v2 Parakeet dir, returned a perfect transcript *with* punctuation/casing: "The quick brown fox jumps over the lazy dog near the riverbank."
+- ✅ **(b) Transform via bundled Vulkan llama-server** — spawned `binaries/vulkan/llama-server.exe -m Qwen3-8B-Q4_K_M.gguf -ngl 99 --jinja`, POSTed a grammar-fix to `/v1/chat/completions`; "the quick brown fox jump over the lazy dog near the riverbank" → "The quick brown fox jumps over the lazy dog near the riverbank." **Ran on GPU**: log enumerates Vulkan0 NVIDIA RTX PRO 5000 + Vulkan1 Intel, auto-fits to device memory, and generated at **42 tok/s** (CPU-only on this Core Ultra 9 would be ~8–12 t/s) — confirms the 4a GPU path live.
+- ✅ **(c) Ollama fallback** — same grammar-fix via Ollama's `/v1/chat/completions` (qwen3-vl:8b) → identical correct output.
+
+**Caveat noted (now FIXED — see below):** Qwen3 ran with thinking enabled (`thinking = 1`, 207 completion tokens for a one-line answer); content returned clean, but disabling thinking cuts transform latency dramatically.
+
+---
+
+## Follow-up: disable Qwen3 thinking for transforms (2026-06-14)
+
+Measured the cost of thinking on the live bundled Vulkan llama-server + Qwen3-8B for a grammar-fix: thinking ON = **12.06s / 553 tokens**; `chat_template_kwargs.enable_thinking=false` = **2.18s / 15 tokens**; `/no_think` soft switch = 3.33s / 19 tokens — all three **byte-identical correct output**. Thinking adds ~5.5× latency for zero quality on instruction-following transforms, so it's now **off by default** (provider-agnostic, user-toggleable).
+
+### What changed
+- **`src/lib/settings/settings.ts`** — new `completion.enableThinking` (`boolean = false`).
+- **`completion/llamacpp.ts`** — `complete()` takes `enableThinking` (default false), sends `chat_template_kwargs: { enable_thinking }` (server runs `--jinja`; non-Qwen templates ignore the unknown kwarg). Confirmed live: `enable_thinking:false` → 15 tokens.
+- **`completion/ollama.ts`** — `complete()` takes `enableThinking`, sends top-level `think` on `/api/generate`. Verified `think:false` is **safe on non-thinking models** (no error; clean answer always lands in `response`, which is all this client reads).
+- **`src/lib/query/isomorphic/transformer.ts`** — both the llamacpp and ollama branches pass `settings.value['completion.enableThinking']`.
+- **Transformation settings page** — added a "Reasoning" toggle (horizontal `Field` + `Switch`), shown for both backends, default off, copy noting it makes transforms slower.
+
+### Verification
+- ✅ `bun run typecheck` clean (1999 files, 0 errors).
+- ✅ Live three-way latency/quality comparison above (numbers from the actual bundled binary + GGUF).
+- Ollama `think:false` nuance: on the *vision* model `qwen3-vl:8b` it didn't fully suppress reasoning (routed it to a separate `thinking` field), but `response` was still clean. The app default `qwen3:8b` (text) honors it properly; either way the client only consumes `response`.
+
+### Still unverified (low-risk)
+GUI button→`invoke`→display wiring in the running app; real `tauri build` bundling per target; macOS/Linux fetch + Metal path; live GPU→CPU runtime fallback (loop is in place, not yet forced to fail).
+
+---
+
+## Follow-up: GPU llama-server variant + CPU fallback (2026-06-14)
+
+Implemented option 4a: prefer a GPU (Vulkan) llama-server build, fall back to CPU automatically. The transform step is the only real latency in the pipeline (transcription is ~3000× real-time), so this targets the actual bottleneck while staying zero-setup (the Vulkan loader ships with GPU drivers — no CUDA toolkit).
+
+### What changed
+- **`scripts/fetch-llama-server.ts`** — now fetches a **list** of variants into **per-variant subdirs** `src-tauri/binaries/<variant>/`. Per-platform defaults: Windows/Linux = `vulkan` + `cpu`; macOS = the single universal `metal` build (variant ignored). `LLAMA_CPP_VARIANT` overrides as a comma list (e.g. `vulkan,cpu`, `cuda-12.4`). Cleans any legacy flat install first; each variant subdir is wiped + reinstalled on `--force`.
+- **`src-tauri/tauri.conf.json`** — `bundle.resources` `binaries/*` → **`binaries/*/*`** (bundles the variant subdirs). NB: Tauri's build script errors if this glob matches nothing, so a bare `cargo check`/`tauri build` requires `fetch-llama-server` to have run first (it does, via `beforeBuildCommand`).
+- **`src-tauri/src/llama_server.rs`** — `resolve_server_binary` → **`resolve_server_candidates`**: returns an ordered `(variant, path)` list (explicit `llamacpp.serverPath` wins; else bundled `binaries/<variant>/llama-server` in preference order `vulkan → metal → cpu`). `start_llama_server` now **tries each candidate in turn**, via a new `spawn_and_wait_health` helper that spawns one binary, drains its pipes, and polls `/health` — bailing **immediately on early process exit** (`child.try_wait()`) so a GPU build that can't load / crashes / OOMs falls through to the next candidate fast instead of burning the full 60s. First healthy backend wins; logs which one. `resolve_bundled_llama_server` returns the first candidate (UI unchanged).
+- **Transformation settings page** — bundled-binary description now notes it prefers GPU (Vulkan/Metal) and falls back to CPU.
+- **`binaries/README.md`** — documents the per-variant layout + runtime preference order.
+
+### Verification
+- ✅ `bun run fetch-llama-server --force` on Windows → installed `vulkan/` (llama-server.exe + 30 libs incl. `ggml-vulkan.dll`, 111 MB) and `cpu/` (+ 29 libs, 40.5 MB); legacy flat files cleaned; top level holds only docs + the two subdirs.
+- ✅ `vulkan/llama-server.exe --version` → b9628, exit 0; `--list-devices` enumerates **NVIDIA RTX PRO 5000 (24 GB)** + Intel iGPU, confirming the Vulkan backend loads and sees GPUs on this host.
+- ✅ `cargo check --lib` clean; monorepo `bun run typecheck` clean (1999 files, 0 errors).
+- ⬜ Not yet: real `tauri build` bundling both variants per target; the macOS/Linux fetch branch; live confirmation that the runtime fallback picks CPU when the GPU path is forced to fail (the loop + early-exit detection is in place but untested against an actual GPU failure).
+
+### macOS note
+"Vulkan as default" is a Windows/Linux story. macOS uses the universal `metal` build (one binary, GPU + internal CPU fallback), installed under `binaries/metal/` and resolved second in the preference order — so no separate CPU build is fetched there.

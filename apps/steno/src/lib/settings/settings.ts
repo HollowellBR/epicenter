@@ -216,6 +216,12 @@ export const Settings = type({
 	// 'ollama'   = user's own Ollama install (optional).
 	'completion.provider': "'llamacpp' | 'ollama' = 'llamacpp'",
 
+	// Let the model "think" (emit reasoning tokens) before answering. Off by
+	// default: transforms are simple instruction-following (grammar/rewrite), so
+	// thinking just adds large latency for no quality gain. Applies to both
+	// backends (llama.cpp `enable_thinking`, Ollama `think`).
+	'completion.enableThinking': 'boolean = false',
+
 	// Bundled llama.cpp (llama-server) settings
 	'llamacpp.serverPath': "string = ''", // path to the llama-server binary
 	'llamacpp.modelPath': "string = ''", // path to the selected .gguf model file

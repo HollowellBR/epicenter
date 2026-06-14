@@ -6,6 +6,10 @@ interface OllamaCompleteParams {
 	model: string;
 	systemPrompt: string;
 	userPrompt: string;
+	/** Allow the model to emit reasoning tokens before answering. Default false.
+	 *  Maps to Ollama's `think` flag; safe to send to non-thinking models (they
+	 *  ignore it), and the clean answer always comes back in `response`. */
+	enableThinking?: boolean;
 }
 
 interface OllamaGenerateResponse {
@@ -22,6 +26,7 @@ export const OllamaCompletionServiceLive = {
 		model,
 		systemPrompt,
 		userPrompt,
+		enableThinking = false,
 	}: OllamaCompleteParams): Promise<Result<string, string>> {
 		if (!model) {
 			return Err(
@@ -41,6 +46,7 @@ export const OllamaCompletionServiceLive = {
 						system: systemPrompt,
 						prompt: userPrompt,
 						stream: false,
+						think: enableThinking,
 					}),
 				});
 
