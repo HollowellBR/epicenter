@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-We actively maintain security updates for the following versions of Epicenter:
+We actively maintain security updates for the following versions of Steno:
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -11,15 +11,15 @@ We actively maintain security updates for the following versions of Epicenter:
 
 ## Reporting a Vulnerability
 
-We take the security of Epicenter seriously. If you believe you have found a security vulnerability in any Epicenter repository, please report it to us as described below.
+We take the security of Steno seriously. If you believe you have found a security vulnerability in any Steno repository, please report it to us as described below.
 
 ### How to Report a Security Vulnerability
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-For security issues, reach out to maintainers or **@braden_w** on our [Discord server](https://go.epicenter.so/discord).
+For security issues, reach out to maintainers or **@braden_w** on our Discord server.
 
-For feedback and fast suggestions, join our [Discord server](https://go.epicenter.so/discord) for quick responses. Our community is always active to help. Please be sure to follow the guidelines.
+For feedback and fast suggestions, join our Discord server for quick responses. Our community is always active to help. Please be sure to follow the guidelines.
 
 ### What to Include in Your Report
 
@@ -33,9 +33,9 @@ Please include the following information to help us triage your report quickly:
 - Proof-of-concept or exploit code (if possible)
 - Impact of the issue, including how an attacker might exploit it
 
-### Security Considerations Specific to Epicenter
+### Security Considerations Specific to Steno
 
-Given that Epicenter is a Tauri-based desktop application that handles API keys and sensitive data, we're particularly interested in:
+Given that Steno is a Tauri-based desktop application that handles API keys and sensitive data, we're particularly interested in:
 
 - **API Key Security**: Issues related to how user API keys are stored, transmitted, or exposed
 - **Local Data Storage**: Vulnerabilities in how transcriptions and user data are stored locally
@@ -54,11 +54,11 @@ Given that Epicenter is a Tauri-based desktop application that handles API keys 
 
 ## Security Best Practices for Users
 
-While using Epicenter:
+While using Steno:
 
-1. **API Keys**: Never share your API keys. Epicenter stores them locally and never transmits them to our servers
-2. **Updates**: Always keep Epicenter updated to the latest version for security patches
-3. **Downloads**: Only download Epicenter from official sources (GitHub releases or our website)
+1. **API Keys**: Never share your API keys. Steno stores them locally and never transmits them to our servers
+2. **Updates**: Always keep Steno updated to the latest version for security patches
+3. **Downloads**: Only download Steno from official sources (GitHub releases or our website)
 4. **Local Storage**: Be aware that your transcriptions are stored locally—secure your device appropriately
 
 ## Disclosure Policy
@@ -76,8 +76,8 @@ Any activities conducted in a manner consistent with this policy will be conside
 
 ## License
 
-Epicenter is open source software licensed under the [AGPL-3.0 License](LICENSE).
+Steno is open source software licensed under the [AGPL-3.0 License](LICENSE).
 
 ---
 
-Thank you for helping keep Epicenter and our users safe! Your efforts to responsibly disclose security issues are greatly appreciated.
+Thank you for helping keep Steno and our users safe! Your efforts to responsibly disclose security issues are greatly appreciated.

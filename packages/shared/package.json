@@ -1,8 +1,8 @@
 {
-	"name": "@epicenter/shared",
+	"name": "@steno/shared",
 	"private": true,
 	"version": "0.0.0",
-	"description": "Shared constants for use Whispering web app, desktop app, and Chrome extension",
+	"description": "Shared constants for use in Steno web app, desktop app, and Chrome extension",
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts"

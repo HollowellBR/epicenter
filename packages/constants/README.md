@@ -1,11 +1,11 @@
-# @epicenter/constants
+# @steno/constants
 
 Environment-aware constants and configuration for all services in the ecosystem. This package provides a unified way to manage service URLs and environment-specific settings across different platforms (Node.js, Cloudflare Workers, and Vite).
 
 ## Installation
 
 ```bash
-bun add @epicenter/constants
+bun add @steno/constants
 ```
 
 ## Architecture
@@ -21,10 +21,10 @@ Files are separated by runtime context (`./cloudflare`, `./node`, `./vite`) to p
 ### Node.js
 
 ```typescript
-import { APPS, APP_URLS, env } from '@epicenter/constants/node';
+import { APPS, APP_URLS, env } from '@steno/constants/node';
 
 // Access pre-evaluated constants
-console.log(APPS.AUTH.URL); // 'http://localhost:8787' or 'https://auth.epicenter.so'
+console.log(APPS.AUTH.URL); // 'http://localhost:8787' or 'https://api.steno.app'
 
 // Use in CORS configuration
 const corsOptions = {
@@ -40,7 +40,7 @@ console.log(env.NODE_ENV); // 'development' or 'production'
 Everything you need for Cloudflare Workers with runtime environment:
 
 ```typescript
-import { APPS, APP_URLS, validateNodeEnv, type NodeEnv } from '@epicenter/constants/cloudflare';
+import { APPS, APP_URLS, validateNodeEnv, type NodeEnv } from '@steno/constants/cloudflare';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
@@ -62,7 +62,7 @@ app.get('/config', (c) => {
 ### Vite
 
 ```typescript
-import { APPS, APP_URLS } from '@epicenter/constants/vite';
+import { APPS, APP_URLS } from '@steno/constants/vite';
 
 // Use in your client application
 const authEndpoint = `${APPS.AUTH.URL}/api/login`;

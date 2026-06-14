@@ -1,16 +1,16 @@
 /**
- * Centralized version constants for all Epicenter applications.
+ * Centralized version constants for all Steno applications.
  * These versions are used for download links, display, and update checks.
  */
 
 export const VERSIONS = {
 	/**
-	 * Whispering application version
+	 * Steno application version
 	 */
-	whispering: '7.11.0',
+	steno: '7.11.0',
 
 	/**
-	 * Epicenter CLI version
+	 * CLI version
 	 */
 	cli: '1.0.0',
 

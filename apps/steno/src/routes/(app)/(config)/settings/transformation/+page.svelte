@@ -1,0 +1,289 @@
+<script lang="ts">
+	import { untrack } from 'svelte';
+	import { Button } from '@steno/ui/button';
+	import * as Field from '@steno/ui/field';
+	import { Input } from '@steno/ui/input';
+	import * as Select from '@steno/ui/select';
+	import { Textarea } from '@steno/ui/textarea';
+	import { invoke } from '@tauri-apps/api/core';
+	import { isErr } from 'wellcrafted/result';
+	import { OllamaCompletionServiceLive } from '$lib/services/isomorphic/completion/ollama';
+	import { LLM_MODELS } from '$lib/services/isomorphic/completion/local/qwen';
+	import { llmDownload } from '$lib/state/llm-download.svelte';
+	import { settings } from '$lib/state/settings.svelte';
+
+	// Path to a llama-server binary bundled with the app, if one ships with it.
+	let bundledServer = $state<string | null>(null);
+
+	const PROVIDER_OPTIONS = [
+		{ value: 'llamacpp', label: 'Bundled llama.cpp (recommended)' },
+		{ value: 'ollama', label: 'Ollama (bring your own)' },
+	] as const;
+
+	const provider = $derived(settings.value['completion.provider']);
+	const providerLabel = $derived(
+		PROVIDER_OPTIONS.find((o) => o.value === provider)?.label ?? 'Select',
+	);
+
+	const selectedLlm = $derived(
+		LLM_MODELS.find((m) => m.id === settings.value['llamacpp.model']) ??
+			LLM_MODELS[0],
+	);
+	const selectedLlmLabel = $derived(selectedLlm.name);
+
+	// Ollama connection helpers (used when the Ollama provider is selected)
+	let connectionStatus: 'idle' | 'testing' | 'success' | 'error' =
+		$state('idle');
+	let connectionMessage = $state('');
+
+	async function testOllama() {
+		connectionStatus = 'testing';
+		connectionMessage = '';
+		const result = await OllamaCompletionServiceLive.listModels(
+			settings.value['ollama.baseUrl'],
+		);
+		if (isErr(result)) {
+			connectionStatus = 'error';
+			connectionMessage = result.error;
+		} else {
+			connectionStatus = 'success';
+			connectionMessage = `Connected. ${result.data.length} model${result.data.length === 1 ? '' : 's'} available.`;
+		}
+	}
+
+	$effect(() => {
+		// Re-check local model status only when the SELECTED model changes.
+		// `untrack` keeps the store's internal settings reads from subscribing
+		// this effect to every persisted-settings re-sync (which fires on window
+		// focus / nav-link hover and used to reset download state).
+		void settings.value['llamacpp.model'];
+		untrack(() => llmDownload.refreshStatus(selectedLlm));
+	});
+
+	$effect(() => {
+		// Detect whether a llama-server binary ships with the app (zero-setup).
+		invoke<string | null>('resolve_bundled_llama_server')
+			.then((path) => {
+				bundledServer = path ?? null;
+			})
+			.catch(() => {
+				bundledServer = null;
+			});
+	});
+</script>
+
+<svelte:head>
+	<title>Transformation Settings - Steno</title>
+</svelte:head>
+
+<Field.Set>
+	<Field.Legend>Transformation</Field.Legend>
+	<Field.Description>
+		Choose the local model that powers text transformations (grammar fixes,
+		rewrites, and custom prompts).
+	</Field.Description>
+	<Field.Separator />
+	<Field.Group>
+		<Field.Field>
+			<Field.Label for="completion-provider">Backend</Field.Label>
+			<Field.Description>
+				The bundled llama.cpp server runs Qwen3 locally with no extra install.
+				Ollama is optional if you already run it.
+			</Field.Description>
+			<Select.Root
+				type="single"
+				bind:value={
+					() => settings.value['completion.provider'],
+					(v) =>
+						settings.updateKey(
+							'completion.provider',
+							v as 'llamacpp' | 'ollama',
+						)
+				}
+			>
+				<Select.Trigger id="completion-provider" class="w-full">
+					{providerLabel}
+				</Select.Trigger>
+				<Select.Content>
+					{#each PROVIDER_OPTIONS as opt}
+						<Select.Item value={opt.value} label={opt.label} />
+					{/each}
+				</Select.Content>
+			</Select.Root>
+		</Field.Field>
+
+		{#if provider === 'llamacpp'}
+			<Field.Separator />
+
+			<Field.Field>
+				<Field.Label for="llamacpp-model">Model</Field.Label>
+				<Field.Description>
+					Qwen3 8B is the most capable for following instructions; 4B is faster
+					and lighter.
+				</Field.Description>
+				<Select.Root
+					type="single"
+					bind:value={
+						() => settings.value['llamacpp.model'],
+						(v) => settings.updateKey('llamacpp.model', v)
+					}
+				>
+					<Select.Trigger id="llamacpp-model" class="w-full">
+						{selectedLlmLabel}
+					</Select.Trigger>
+					<Select.Content>
+						{#each LLM_MODELS as model}
+							<Select.Item
+								value={model.id}
+								label="{model.name} — {model.size}"
+							/>
+						{/each}
+					</Select.Content>
+				</Select.Root>
+
+				{#if llmDownload.state.type === 'ready'}
+					<p class="text-sm text-success">
+						{selectedLlm.name} is downloaded and ready.
+					</p>
+				{:else if llmDownload.state.type === 'downloading'}
+					<p class="text-muted-foreground text-sm">
+						Downloading… {llmDownload.state.progress}%
+					</p>
+				{:else if llmDownload.state.type === 'error'}
+					<p class="text-destructive text-sm">{llmDownload.state.message}</p>
+				{/if}
+
+				<div>
+					<Button
+						variant="outline"
+						loading={llmDownload.state.type === 'downloading'}
+						disabled={llmDownload.state.type === 'downloading'}
+						onclick={() => llmDownload.download(selectedLlm)}
+					>
+						{llmDownload.state.type === 'ready' ? 'Re-download' : 'Download'}
+						{selectedLlm.size}
+					</Button>
+				</div>
+			</Field.Field>
+
+			<Field.Separator />
+
+			<Field.Field>
+				<Field.Label for="llamacpp-server-path">
+					llama-server path (optional)
+				</Field.Label>
+				<Field.Description>
+					{#if bundledServer}
+						A llama-server binary ships with the app — no setup needed. Set a
+						path only to override it.
+					{:else}
+						No bundled binary detected. Set an absolute path to a prebuilt
+						<code class="bg-muted rounded px-1">llama-server</code> (from a llama.cpp
+						release).
+					{/if}
+				</Field.Description>
+				<Input
+					id="llamacpp-server-path"
+					value={settings.value['llamacpp.serverPath']}
+					oninput={(e) =>
+						settings.updateKey('llamacpp.serverPath', e.currentTarget.value)}
+					placeholder={bundledServer ?? '/path/to/llama-server'}
+				/>
+			</Field.Field>
+
+			<Field.Separator />
+
+			<Field.Field>
+				<Field.Label for="llamacpp-default-prompt">
+					Default Transformation Prompt
+				</Field.Label>
+				<Field.Description>
+					System prompt used when a transformation step has no custom prompt.
+				</Field.Description>
+				<Textarea
+					id="llamacpp-default-prompt"
+					value={settings.value['llamacpp.defaultPrompt']}
+					oninput={(e) =>
+						settings.updateKey('llamacpp.defaultPrompt', e.currentTarget.value)}
+					rows={3}
+					placeholder="Fix grammar and punctuation"
+				/>
+			</Field.Field>
+		{:else}
+			<Field.Separator />
+
+			<Field.Field>
+				<Field.Label for="ollama-base-url">Endpoint URL</Field.Label>
+				<Field.Description>
+					The Ollama server address. Default is http://localhost:11434.
+				</Field.Description>
+				<div class="flex gap-2">
+					<Input
+						id="ollama-base-url"
+						value={settings.value['ollama.baseUrl']}
+						oninput={(e) =>
+							settings.updateKey('ollama.baseUrl', e.currentTarget.value)}
+						placeholder="http://localhost:11434"
+						class="flex-1"
+					/>
+					<Button
+						variant="outline"
+						onclick={testOllama}
+						loading={connectionStatus === 'testing'}
+						disabled={connectionStatus === 'testing'}
+					>
+						Test
+					</Button>
+				</div>
+				{#if connectionMessage}
+					<p
+						class={connectionStatus === 'error'
+							? 'text-destructive text-sm'
+							: 'text-sm text-success'}
+					>
+						{connectionMessage}
+					</p>
+				{/if}
+			</Field.Field>
+
+			<Field.Separator />
+
+			<Field.Field>
+				<Field.Label for="ollama-model">Model</Field.Label>
+				<Field.Description>
+					Pull a model first with <code class="bg-muted rounded px-1"
+						>ollama pull &lt;model&gt;</code
+					>. Qwen3 is recommended (e.g. <code class="bg-muted rounded px-1"
+						>qwen3:8b</code
+					>).
+				</Field.Description>
+				<Input
+					id="ollama-model"
+					value={settings.value['ollama.model']}
+					oninput={(e) =>
+						settings.updateKey('ollama.model', e.currentTarget.value)}
+					placeholder="qwen3:8b"
+				/>
+			</Field.Field>
+
+			<Field.Separator />
+
+			<Field.Field>
+				<Field.Label for="ollama-default-prompt">
+					Default Transformation Prompt
+				</Field.Label>
+				<Field.Description>
+					System prompt used when a transformation step has no custom prompt.
+				</Field.Description>
+				<Textarea
+					id="ollama-default-prompt"
+					value={settings.value['ollama.defaultPrompt']}
+					oninput={(e) =>
+						settings.updateKey('ollama.defaultPrompt', e.currentTarget.value)}
+					rows={3}
+					placeholder="Fix grammar and punctuation"
+				/>
+			</Field.Field>
+		{/if}
+	</Field.Group>
+</Field.Set>

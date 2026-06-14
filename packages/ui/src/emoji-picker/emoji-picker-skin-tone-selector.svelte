@@ -2,7 +2,7 @@
 	import { box } from 'svelte-toolbelt';
 	import { useEmojiPickerSkinToneSelector } from './emoji-picker.svelte.js';
 	import type { EmojiPickerSkinProps } from './types.js';
-	import { Button, type ButtonElementProps } from '../button';
+	import { Button } from '../button';
 	import { cn } from '../utils.js';
 
 	let {
@@ -24,7 +24,7 @@
 	{variant}
 	{size}
 	class={cn('size-8', className)}
-	onclick={(e: Parameters[0]) => {
+	onclick={(e: Parameters<NonNullable<typeof onclick>>[0]) => {
 		onclick?.(e);
 		skinState.cycleSkinTone();
 	}}

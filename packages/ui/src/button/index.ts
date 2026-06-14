@@ -12,6 +12,7 @@ export {
 	Root as Button,
 	buttonVariants,
 	type ButtonProps,
+	type ButtonProps as ButtonElementProps,
 	type ButtonSize,
 	type ButtonVariant,
 };

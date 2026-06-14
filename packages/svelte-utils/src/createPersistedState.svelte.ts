@@ -56,6 +56,7 @@ export function createPersistedState<TSchema extends StandardSchemaV1>({
 	onUpdateSuccess,
 	onUpdateError,
 	onUpdateSettled,
+	fileFallback,
 }: {
 	/** The key used to store the value in local storage. */
 	key: string;
@@ -101,6 +102,15 @@ export function createPersistedState<TSchema extends StandardSchemaV1>({
 	 * Handler for when the value from storage update is settled.
 	 */
 	onUpdateSettled?: () => void;
+	/**
+	 * Optional disk-backed fallback for environments where localStorage may not flush on crash.
+	 * When provided, settings are dual-written to a file. On startup, if localStorage is empty,
+	 * the file is used to restore the value.
+	 */
+	fileFallback?: {
+		read: () => Promise<string | null>;
+		write: (json: string) => Promise<void>;
+	};
 }) {
 	const parseValueFromStorage = (
 		rawValue: string | null,
@@ -142,6 +152,19 @@ export function createPersistedState<TSchema extends StandardSchemaV1>({
 
 	let value = $state(parseValueFromStorage(window.localStorage.getItem(key)));
 
+	// If localStorage was empty and we have a file fallback, try restoring from disk
+	if (window.localStorage.getItem(key) === null && fileFallback) {
+		fileFallback.read().then((json) => {
+			if (json === null) return;
+			const restored = parseValueFromStorage(json);
+			// Only apply if we actually got a non-default value from the file
+			window.localStorage.setItem(key, json);
+			value = restored;
+		}).catch((err) => {
+			onUpdateError?.(err);
+		});
+	}
+
 	window.addEventListener('storage', (e) => {
 		if (e.key !== key) return;
 		value = parseValueFromStorage(e.newValue);
@@ -158,7 +181,9 @@ export function createPersistedState<TSchema extends StandardSchemaV1>({
 		set value(newValue: StandardSchemaV1.InferOutput<TSchema>) {
 			value = newValue;
 			try {
-				window.localStorage.setItem(key, JSON.stringify(newValue));
+				const json = JSON.stringify(newValue);
+				window.localStorage.setItem(key, json);
+				fileFallback?.write(json).catch((err) => onUpdateError?.(err));
 				onUpdateSuccess?.(newValue);
 			} catch (error) {
 				onUpdateError?.(error);

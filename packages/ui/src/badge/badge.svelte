@@ -14,9 +14,9 @@
 				outline:
 					'text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
 				id: 'px-1.5 bg-muted text-muted-foreground [a&]:hover:bg-muted/90 border-transparent font-mono text-xs rounded-md font-normal',
-				'status.completed': 'bg-green-500/10 text-green-500',
-				'status.failed': 'bg-red-500/10 text-red-500',
-				'status.running': 'bg-blue-500/10 text-blue-500',
+				'status.completed': 'bg-success/10 text-success-emphasis',
+				'status.failed': 'bg-destructive/10 text-destructive-emphasis',
+				'status.running': 'bg-primary/10 text-primary',
 				success:
 					'bg-success [a&]:hover:bg-success/90 focus-visible:ring-success/20 dark:focus-visible:ring-success/40 dark:bg-success/80 border-transparent text-white',
 			},

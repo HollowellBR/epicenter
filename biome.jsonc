@@ -16,7 +16,7 @@
 		"includes": [
 			"**",
 			"!.conductor",
-			"!apps/whispering/src-tauri",
+			"!apps/steno/src-tauri",
 			"!**/.svelte-kit",
 			"!**/.astro",
 			"!**/.turbo",

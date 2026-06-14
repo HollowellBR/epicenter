@@ -1,6 +1,6 @@
-# Contributing to Epicenter
+# Contributing to Steno
 
-Welcome! We're excited you're interested in contributing to Epicenter. This guide will help you get up and running quickly.
+Welcome! We're excited you're interested in contributing to Steno. This guide will help you get up and running quickly.
 
 ## Prerequisites
 
@@ -10,17 +10,17 @@ Welcome! We're excited you're interested in contributing to Epicenter. This guid
 
 ## Getting Started
 
-Epicenter is a monorepo containing multiple applications. The main application ready for contributions is **Whispering** (located in `apps/whispering`).
+Steno is a monorepo containing the main transcription app and shared packages. The main application is located in `apps/steno`.
 
 ### Quick Setup
 
 1. **Fork and clone the repository**
 
-   [Fork the repository](https://github.com/EpicenterHQ/epicenter/fork) and clone your fork:
+   Fork the repository and clone your fork:
 
    ```bash
-   git clone https://github.com/<your-username>/epicenter.git
-   cd epicenter
+   git clone https://github.com/<your-username>/steno.git
+   cd steno
    ```
 
    > New to open source? Check out [How to Contribute to Open Source](https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github) (free video series).
@@ -36,10 +36,10 @@ Epicenter is a monorepo containing multiple applications. The main application r
    > **Note**: Desktop app development requires external tools not installed by the command above. Install these manually.
    > (For example: [Rust](https://www.rust-lang.org/tools/install) and [CMake](https://cmake.org/download/))
 
-3. **Navigate to the Whispering app**
+3. **Navigate to the Steno app**
 
    ```bash
-   cd apps/whispering
+   cd apps/steno
    ```
 
 4. **Start development**
@@ -59,13 +59,13 @@ That's it! You're ready to start contributing.
 This is a monorepo with the following structure:
 
 ```
-epicenter/
+steno/
 ├── apps/
-│   ├── whispering/     # Main transcription app (ready for contributions)
-│   ├── sh/             # Local assistant (in development)
-│   └── ...             # Other apps in various stages
+│   └── steno/          # Main transcription app
 ├── packages/
-│   ├── db/             # Shared database schema for our hosted services
+│   ├── config/         # Shared configuration
+│   ├── constants/      # Shared constants
+│   ├── svelte-utils/   # Svelte utilities
 │   ├── ui/             # Shared UI components
 │   └── ...
 └── ...
@@ -73,7 +73,7 @@ epicenter/
 
 ### Where to Contribute
 
-Currently, **Whispering** (`apps/whispering`) is the most mature application and the best place to start contributing. Check the [Whispering README](apps/whispering/README.md) for specific details about that application.
+Currently, **Steno** (`apps/steno`) is the most mature application and the best place to start contributing. Check the [Steno README](apps/steno/README.md) for specific details about that application.
 
 ## Development Workflow
 
@@ -95,7 +95,7 @@ Currently, **Whispering** (`apps/whispering`) is the most mature application and
 4. **Commit using conventional commits**
 
    ```bash
-   git commit -m "feat(whispering): add new feature"
+   git commit -m "feat(steno): add new feature"
    ```
 
 5. **Push and create a pull request**
@@ -104,8 +104,8 @@ Currently, **Whispering** (`apps/whispering`) is the most mature application and
    git push origin feat/your-feature-name
    ```
 
-   Create a PR to merge your fork's branch into `EpicenterHQ/epicenter:main`:
-   Go to [EpicenterHQ/epicenter](https://github.com/EpicenterHQ/epicenter) — GitHub usually shows a "Compare & pull request" banner for recent pushes.
+   Create a PR to merge your fork's branch into the main branch.
+   GitHub usually shows a "Compare & pull request" banner for recent pushes.
 
 <details>
 <summary>Tips for new contributors</summary>
@@ -123,7 +123,7 @@ git merge upstream/main
 > Note: Add the upstream remote to sync with the main repo:
 >
 > ```bash
-> git remote add upstream https://github.com/EpicenterHQ/epicenter.git
+> git remote add upstream https://github.com/<upstream-org>/steno.git
 > ```
 
 **If your PR has conflicts**
@@ -136,40 +136,6 @@ git rebase upstream/main
 ```
 
 </details>
-
-## Local Development: Testing the CLI
-
-If you're working on Epicenter's CLI (`packages/epicenter`), you can test it locally without publishing using `bun link`.
-
-### One-Time Setup
-
-Link the package globally from the package directory:
-
-```bash
-cd packages/epicenter
-bun link
-```
-
-This makes the `epicenter` command available globally on your system, pointing to your local development version.
-
-### Using the CLI
-
-Now you can use the `epicenter` command from any directory:
-
-```bash
-epicenter --help
-```
-
-The CLI will use your local development version, so any changes you make to the CLI code will be reflected immediately.
-
-### Unlinking
-
-When you're done testing, you can unlink the package:
-
-```bash
-cd packages/epicenter
-bun unlink
-```
 
 ## Coding Standards
 
@@ -198,7 +164,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 Examples:
 
-- `feat(whispering): add model selection for OpenAI providers`
+- `feat(steno): add model selection for OpenAI providers`
 - `fix(sound): resolve audio import paths`
 - `docs: update contribution guidelines`
 
@@ -224,7 +190,7 @@ curl -fsSL https://bun.sh/install | bash -s "bun-v1.2.19"
 
 ## Getting Help
 
-- **Discord**: Join our community at [go.epicenter.so/discord](https://go.epicenter.so/discord) and DM me to get started contributing
+- **Discord**: Join our community to get started contributing
 - **Issues**: Check existing issues or create a new one
 - **Documentation**: Each app has its own README with specific details
 
@@ -252,4 +218,4 @@ Feel free to:
 - Open an issue for discussion
 - Join our Discord and DM me directly to get started
 
-Thank you for contributing to Epicenter! We're building something special together.
+Thank you for contributing to Steno! We're building something special together.

@@ -1,0 +1,100 @@
+<script lang="ts">
+	import { Label } from '@steno/ui/label';
+	import * as Select from '@steno/ui/select';
+	import { Badge } from '@steno/ui/badge';
+	import { cn } from '@steno/ui/utils';
+	import type { Snippet } from 'svelte';
+	import {
+		TRANSCRIPTION_SERVICES,
+		type TranscriptionService,
+		TRANSCRIPTION_SERVICE_IDS,
+	} from '$lib/services/isomorphic/transcription/registry';
+
+	type TranscriptionServiceId = (typeof TRANSCRIPTION_SERVICE_IDS)[number];
+
+	let {
+		id = 'transcription-service',
+		label = 'Transcription Service',
+		selected = $bindable(),
+		class: className,
+		disabled = false,
+		hideLabel = false,
+		description,
+	}: {
+		id?: string;
+		label?: string;
+		selected: TranscriptionServiceId;
+		class?: string;
+		disabled?: boolean;
+		hideLabel?: boolean;
+		description?: string | Snippet;
+	} = $props();
+
+	const selectedService = $derived(
+		TRANSCRIPTION_SERVICES.find((service) => service.id === selected),
+	);
+</script>
+
+{#snippet renderServiceIcon(service: TranscriptionService)}
+	<div
+		class={cn(
+			'size-4 shrink-0 flex items-center justify-center [&>svg]:size-full',
+			service.invertInDarkMode &&
+				'dark:[&>svg]:invert dark:[&>svg]:brightness-90',
+		)}
+	>
+		{@html service.icon}
+	</div>
+{/snippet}
+
+<div class="flex flex-col gap-2">
+	<Label class={cn('text-sm', hideLabel && 'sr-only')} for={id}>
+		{label}
+	</Label>
+	<Select.Root type="single" bind:value={selected} {disabled}>
+		<Select.Trigger class={cn('w-full', className)} {id}>
+			<div class="flex items-center gap-2">
+				{#if selectedService}
+					{@render renderServiceIcon(selectedService)}
+					<span>{selectedService.name}</span>
+				{:else}
+					<span>Select a transcription service</span>
+				{/if}
+			</div>
+		</Select.Trigger>
+		<Select.Content class="max-h-[400px]">
+			<Select.Group>
+				<Select.GroupHeading>Local (Offline)</Select.GroupHeading>
+				{#each TRANSCRIPTION_SERVICES as service}
+					<Select.Item value={service.id} label={service.name}>
+						<div class="flex items-start gap-3 py-1">
+							<div class="mt-0.5">
+								{@render renderServiceIcon(service)}
+							</div>
+							<div class="flex-1 min-w-0">
+								<div class="flex items-center gap-2">
+									<span class="font-medium">{service.name}</span>
+									<Badge variant="secondary" class="text-xs">Local</Badge>
+								</div>
+								{#if service.description}
+									<div class="text-xs text-muted-foreground mt-1">
+										{service.description}
+									</div>
+								{/if}
+							</div>
+						</div>
+					</Select.Item>
+				{/each}
+			</Select.Group>
+		</Select.Content>
+	</Select.Root>
+	{#if description}
+		<div class="text-muted-foreground text-sm">
+			{#if typeof description === 'string'}
+				{description}
+			{:else}
+				{@render description()}
+			{/if}
+		</div>
+	{/if}
+</div>

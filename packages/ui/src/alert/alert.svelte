@@ -7,9 +7,10 @@
 			variant: {
 				default: 'bg-card text-card-foreground',
 				destructive:
-					'text-destructive bg-card *:data-[slot=alert-description]:text-destructive/90 [&>svg]:text-current',
+					'text-destructive-emphasis bg-card *:data-[slot=alert-description]:text-destructive-emphasis/90 [&>svg]:text-current',
 				warning:
-					'text-warning bg-card *:data-[slot=alert-description]:text-warning/90 [&>svg]:text-current',
+					'text-warning-emphasis bg-card *:data-[slot=alert-description]:text-warning-emphasis/90 [&>svg]:text-current',
+				info: 'text-primary bg-card *:data-[slot=alert-description]:text-primary/90 [&>svg]:text-current',
 			},
 		},
 		defaultVariants: {

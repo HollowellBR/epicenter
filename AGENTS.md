@@ -1,8 +1,8 @@
-# Epicenter
+# Steno
 
-Local-first workspace platform. Monorepo with Yjs CRDTs, Tauri desktop app, and Svelte UI.
+Open-source, local-first voice transcription app. Monorepo with Tauri desktop app and Svelte UI.
 
-Structure: `apps/epicenter/` (Tauri app), `packages/epicenter/` (core TypeScript/Yjs library), `packages/ui/` (shadcn-svelte components), `specs/` (planning docs), `docs/` (reference materials).
+Structure: `apps/steno/` (Tauri app), `packages/ui/` (shadcn-svelte components), `packages/config/` (shared config), `packages/constants/` (shared constants), `packages/svelte-utils/` (Svelte utilities).
 
 Always use bun: Prefer `bun` over npm, yarn, pnpm, and node. Use `bun run`, `bun test`, `bun install`, and `bun x` (instead of npx).
 

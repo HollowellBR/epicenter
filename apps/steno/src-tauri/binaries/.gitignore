@@ -1,0 +1,5 @@
+# Bundled prebuilt llama-server binaries are large and platform-specific.
+# Keep this folder tracked, but don't commit the binaries/libraries themselves.
+*
+!.gitignore
+!README.md

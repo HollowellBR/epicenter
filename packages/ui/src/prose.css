@@ -170,7 +170,7 @@
 
 	/* Text formatting */
 	& mark {
-		@apply bg-yellow-300 dark:bg-yellow-300/20;
+		@apply bg-warning/30 dark:bg-warning/20;
 	}
 
 	& :where(strong, b) {

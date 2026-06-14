@@ -1,5 +1,5 @@
 {
-	"name": "@epicenter/ui",
+	"name": "@steno/ui",
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
@@ -36,7 +36,7 @@
 	},
 	"devDependencies": {
 		"@emoji-mart/data": "^1.2.1",
-		"@epicenter/config": "workspace:*",
+		"@steno/config": "workspace:*",
 		"@internationalized/date": "^3.10.0",
 		"@types/node": "catalog:",
 		"jsrepo": "^3.0.8",

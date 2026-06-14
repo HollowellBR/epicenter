@@ -1,132 +1,74 @@
 <p align="center">
-  <a href="https://epicenter.so">
-    <img width="200" src="https://github.com/user-attachments/assets/9e210c52-2740-43b6-af3f-e6eaf4b5c397" alt="Epicenter">
-  </a>
-  <h1 align="center">Epicenter</h1>
-  <p align="center">Local-first, open-source apps</p>
-  <p align="center">Own your data. Use any model you want. Free and open source ❤️</p>
+  <h1 align="center">Steno</h1>
+  <p align="center">Open-source, local-first voice transcription</p>
+  <p align="center">Own your data. Use any model you want. Free and open source.</p>
 </p>
 
-> **📢 Repository Update:** Whispering has become **Epicenter**! The original repository moved [here](https://github.com/EpicenterHQ/epicenter/tree/main/apps/whispering). Everything else remains the same—same tools, same philosophy, same team.
->
-> <details>
-> <summary> Full details...
-> </summary>
->
-> - Whispering's evolution beyond transcription required changes to the repository's structure and branding.
-> - Everything else remains the same—same tools, same philosophy, same team.
-> - The original app lives on as [_Epicenter Whispering_](https://github.com/EpicenterHQ/epicenter/tree/main/apps/whispering), keeping a tight focus on transcription.
-> - This makes room for standalone apps with complementary, but non-transcription-related features (like [_Epicenter Assistant_](https://github.com/EpicenterHQ/epicenter/tree/main/apps/sh)).
-> - The new [root](https://github.com/EpicenterHQ/epicenter/) of the Epicenter repository contains common files supporting all the apps in the ecosystem.
-> - Note: the old URL [github.com/braden-w/whispering](https://github.com/braden-w/whispering) is now just a thin placeholder redirecting to this rebranded repository.
->
-> </details>
-
 <p align="center">
-  <!-- GitHub Stars Badge -->
-  <a href="https://github.com/EpicenterHQ/epicenter" target="_blank">
-    <img alt="GitHub stars" src="https://img.shields.io/github/stars/EpicenterHQ/epicenter?style=flat-square" />
-  </a>
-  <!-- Latest Version Badge -->
-  <img src="https://img.shields.io/github/v/release/EpicenterHQ/epicenter?style=flat-square&label=Latest%20Version&color=brightgreen" />
   <!-- License Badge -->
   <a href="LICENSE" target="_blank">
-    <img alt="AGPL-3.0 License" src="https://img.shields.io/github/license/EpicenterHQ/epicenter.svg?style=flat-square" />
-  </a>
-  <!-- Discord Badge -->
-  <a href="https://go.epicenter.so/discord" target="_blank">
-    <img alt="Discord" src="https://img.shields.io/badge/Discord-Join%20us-5865F2?style=flat-square&logo=discord&logoColor=white" />
+    <img alt="AGPL-3.0 License" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square" />
   </a>
   <!-- Platform Support Badges -->
-  <a href="https://github.com/EpicenterHQ/epicenter/releases" target="_blank">
-    <img alt="macOS" src="https://img.shields.io/badge/-macOS-black?style=flat-square&logo=apple&logoColor=white" />
-  </a>
-  <a href="https://github.com/EpicenterHQ/epicenter/releases" target="_blank">
-    <img alt="Windows" src="https://img.shields.io/badge/-Windows-blue?style=flat-square&logo=windows&logoColor=white" />
-  </a>
-  <a href="https://github.com/EpicenterHQ/epicenter/releases" target="_blank">
-    <img alt="Linux" src="https://img.shields.io/badge/-Linux-yellow?style=flat-square&logo=linux&logoColor=white" />
-  </a>
+  <img alt="macOS" src="https://img.shields.io/badge/-macOS-black?style=flat-square&logo=apple&logoColor=white" />
+  <img alt="Windows" src="https://img.shields.io/badge/-Windows-blue?style=flat-square&logo=windows&logoColor=white" />
+  <img alt="Linux" src="https://img.shields.io/badge/-Linux-yellow?style=flat-square&logo=linux&logoColor=white" />
 </p>
 
 <p align="center">
-  <a href="#current-tools">Tools</a> •
-  <a href="#where-were-headed">Vision</a> •
-  <a href="#join-us">Contributing</a> •
-  <a href="https://go.epicenter.so/discord">Discord</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#features">Features</a> •
+  <a href="#contributing">Contributing</a>
 </p>
 
 ---
 
-## What is Epicenter?
+## What is Steno?
 
-Epicenter is an ecosystem of open-source, local-first apps. Our eventual goal is to store all of your data—notes, transcripts, chat histories—in a single folder of plain text and SQLite. Every tool we build shares this memory. It's open, tweakable, and yours. Grep it, open it in Obsidian, host it wherever you like. The choice is yours.
+Steno is an open-source, local-first desktop transcription app. Press a shortcut, speak, and get text. Your audio goes directly from your machine to a local model or your chosen cloud provider -- no middleman, no vendor lock-in.
 
-### The Vision (how the ecosystem will work):
+### Features
 
-- Long-time Epicenter Whispering users may have configured numerous LLM API keys, transformations, and even local models.
-- When the Epicenter Assistant is started for the very first time, all these API keys, transformations and local models seamlessly work.
-- Epicenter Assistant may even access Whispering transcription history to provide personalized results out of the box.
-- Of course, this works the other way, too: Whispering can take advantage of your Epicenter Assistant history to optimize transcriptions and transformations!
-- In a siloed ecosystem, this requires much more effort, or may not even be possible.
-
-## Current Tools
-
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <h3>🎙️ <a href="https://github.com/EpicenterHQ/epicenter/tree/main/apps/whispering">Epicenter Whispering</a></h3>
-      <p>Press shortcut → speak → get text. Desktop transcription that cuts out the middleman. Bring your own API key.</p>
-      <p><strong>→ <a href="https://github.com/EpicenterHQ/epicenter/tree/main/apps/whispering">View source code</a></strong></p>
-    </td>
-    <td align="center" width="50%">
-      <h3>🤖 <a href="https://github.com/EpicenterHQ/epicenter/tree/main/apps/sh">Epicenter Assistant</a></h3>
-      <p><em>Currently being rebuilt.</em></p>
-      <p>A local-first assistant you can chat with. It lives in your folder, becoming the access point to everything you've ever written, thought, or built.</p>
-      <p><strong>→ Track rebuild progress on the <a href="https://github.com/EpicenterHQ/epicenter/tree/rebuild-assistant">rebuild-assistant branch</a></strong></p>
-    </td>
-  </tr>
-</table>
-
-## Where We're Headed
-
-Our vision is to build a personal workspace where you own your data, choose your models, and replace siloed apps with open, interoperable alternatives. All while preserving authenticity and being free and open source.
+- **Local-first transcription** with Parakeet (NVIDIA NeMo) -- completely offline, completely free
+- **Cloud transcription** via your own API keys (Groq, OpenAI, ElevenLabs, Deepgram)
+- **AI-powered transformations** -- fix grammar, translate, reformat with any LLM (Ollama, OpenAI, Anthropic, etc.)
+- **Voice Activity Detection (VAD)** -- hands-free recording that starts when you speak
+- **Wake word detection** -- say a trigger word to start recording
+- **Global hotkeys** -- system-wide keyboard shortcuts via rdev
+- **Cross-platform** -- macOS, Windows, Linux
+- **Tiny footprint** -- ~22MB, starts instantly (Svelte 5 + Tauri)
 
 ## Quick Start
 
-### Install Epicenter Whispering
-
-Our first app in the ecosystem. Choose your installation method:
+### Install Steno
 
 **macOS (Homebrew)**
 
 ```bash
-brew install --cask whispering
+brew install --cask steno
 ```
 
 **macOS, Windows, Linux (Direct Download)**
 
-Download the installer for your platform from [GitHub Releases](https://github.com/EpicenterHQ/epicenter/releases/latest):
+Download the installer for your platform from GitHub Releases:
 
 - macOS: `.dmg` (Apple Silicon or Intel)
 - Windows: `.msi` or `.exe`
 - Linux: `.AppImage`, `.deb`, or `.rpm`
 
-**→ [Full installation guide and setup instructions](https://github.com/EpicenterHQ/epicenter/tree/main/apps/whispering#install-whispering)**
+**Full installation guide:** See [apps/steno/README.md](apps/steno/README.md)
 
 ### Build from Source
-
-For developers or contributors:
 
 ```bash
 # Prerequisites:
 # - Install Bun from https://bun.sh (run bun upgrade if there's issues)
-# - Install Rust and Cargo from https://www.rust-lang.org/tools/install (brew install rustup)
+# - Install Rust and Cargo from https://www.rust-lang.org/tools/install
 
-git clone https://github.com/EpicenterHQ/epicenter.git
-cd epicenter
-bun install  # Will prompt to upgrade if your Bun version is too old
-cd apps/whispering
+git clone <your-repo-url>
+cd voice_transcription
+bun install
+cd apps/steno
 bun dev
 ```
 
@@ -150,21 +92,9 @@ bun install
 
 Note: You rarely need `bun nuke` since Cargo handles incremental Rust builds well. Use `bun clean` first; reserve `bun nuke` for when things are truly broken.
 
-## Join Us
+## Contributing
 
-## Discord Community
-
-If you think like a generalist, build like a hacker, and value tools that respect your mind—you'll fit right in.
-
-**→ [Join our Discord](https://go.epicenter.so/discord)**
-
-### We're looking for contributors
-
-If you're passionate about open source, local-first software, or are just a cracked Svelte/TypeScript developer—we'd love to build with you.
-
-**→ [Read our Contributing Guide](CONTRIBUTING.md) to get started**
-
-Contributors coordinate and share ideas in our Discord community.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
 ## Tech Stack
 
@@ -180,13 +110,3 @@ Contributors coordinate and share ideas in our Discord community.
 ## License
 
 [AGPL-3.0](LICENSE). Build on it. Fork it. Make it yours. Please contribute if you can.
-
----
-
-<p align="center">
-  <strong>Contact:</strong> <a href="mailto:github@bradenwong.com">github@bradenwong.com</a> | <a href="https://go.epicenter.so/discord">Discord</a> | <a href="https://twitter.com/braden_wong_">@braden_wong_</a>
-</p>
-
-<p align="center">
-  <sub>Built with ❤️ for data ownership, local-first, and open-source</sub>
-</p>

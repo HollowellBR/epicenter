@@ -1,5 +1,5 @@
 {
-	"name": "@epicenter/svelte-utils",
+	"name": "@steno/svelte-utils",
 	"version": "0.0.1",
 	"private": true,
 	"type": "module",

@@ -40,10 +40,21 @@
 	export type ButtonVariant = VariantProps<typeof buttonVariants>['variant'];
 	export type ButtonSize = VariantProps<typeof buttonVariants>['size'];
 
+	// This component renders either a <button> or an <a> from one prop set, so
+	// we intersect both attribute types. Event-handler props (onclick, etc.)
+	// are typed against the concrete element and would collide across the
+	// intersection, so we keep the button element's handlers and omit the
+	// anchor's; at runtime the same handlers still fire when rendered as a link.
 	export type ButtonProps = WithElementRef<HTMLButtonAttributes> &
-		WithElementRef<HTMLAnchorAttributes> & {
+		Omit<WithElementRef<HTMLAnchorAttributes>, `on${string}`> & {
 			variant?: ButtonVariant;
 			size?: ButtonSize;
+			/**
+			 * Shows a spinner and disables the button.
+			 * Replaces children with a spinner when true and button has icon size,
+			 * or prepends a spinner otherwise.
+			 */
+			loading?: boolean;
 			/**
 			 * Tooltip text to display on hover.
 			 * Requires a parent `<Tooltip.Provider>` in the component tree.
@@ -55,11 +66,13 @@
 
 <script lang="ts">
 	import * as Tooltip from '#/tooltip';
+	import Loader2Icon from '@lucide/svelte/icons/loader-2';
 
 	let {
 		class: className,
 		variant = 'default',
 		size = 'default',
+		loading = false,
 		ref = $bindable(null),
 		href = undefined,
 		type = 'button',
@@ -68,34 +81,60 @@
 		tooltip,
 		...restProps
 	}: ButtonProps = $props();
+
+	const isIconSize = $derived(
+		size === 'icon' || size === 'icon-xs' || size === 'icon-sm' || size === 'icon-lg',
+	);
+	const effectiveDisabled = $derived(disabled || loading);
+
+	// Auto-derive aria-label from tooltip for icon buttons when no explicit label is provided
+	const derivedAriaLabel = $derived(
+		!restProps['aria-label'] && !restProps['aria-labelledby'] && tooltip
+			? tooltip
+			: undefined,
+	);
 </script>
 
-{#snippet buttonContent(tooltipProps?: Record)}
+{#snippet inner()}
+	{#if loading}
+		<Loader2Icon class="animate-spin" aria-hidden="true" />
+	{/if}
+	{#if !(loading && isIconSize)}
+		{@render children?.()}
+	{/if}
+{/snippet}
+
+{#snippet buttonContent(tooltipProps?: Record<string, unknown>)}
 	{#if href}
+		{@const anchorProps = restProps as Record<string, unknown>}
 		<a
 			bind:this={ref}
 			data-slot="button"
 			class={cn(buttonVariants({ variant, size }), className)}
-			href={disabled ? undefined : href}
-			aria-disabled={disabled}
-			role={disabled ? 'link' : undefined}
-			tabindex={disabled ? -1 : undefined}
+			href={effectiveDisabled ? undefined : href}
+			aria-disabled={effectiveDisabled}
+			aria-busy={loading || undefined}
+			aria-label={derivedAriaLabel}
+			role={effectiveDisabled ? 'link' : undefined}
+			tabindex={effectiveDisabled ? -1 : undefined}
 			{...tooltipProps}
-			{...restProps}
+			{...anchorProps}
 		>
-			{@render children?.()}
+			{@render inner()}
 		</a>
 	{:else}
 		<button
 			bind:this={ref}
 			data-slot="button"
 			class={cn(buttonVariants({ variant, size }), className)}
+			aria-label={derivedAriaLabel}
+			aria-busy={loading || undefined}
 			{type}
-			{disabled}
+			disabled={effectiveDisabled}
 			{...tooltipProps}
 			{...restProps}
 		>
-			{@render children?.()}
+			{@render inner()}
 		</button>
 	{/if}
 {/snippet}

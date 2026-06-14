@@ -49,6 +49,15 @@
 	--destructive: oklch(0.577 0.245 27.325);
 	--warning: oklch(0.666 0.179 58.318);
 	--success: oklch(0.736 0.196 144.128);
+	/*
+	  Emphasis variants: darker, WCAG-AA-legible text colors for use as
+	  colored text on a subtle (~10%) tint of the same hue. The base tokens
+	  above are mid-tone fills and fall below 4.5:1 as small text on a light
+	  tint, so status labels and similar inline text use these instead.
+	*/
+	--success-emphasis: oklch(0.52 0.15 144.128);
+	--warning-emphasis: oklch(0.53 0.14 65);
+	--destructive-emphasis: oklch(0.545 0.18 27.325);
 	--border: oklch(0.929 0.013 255.508);
 	--input: oklch(0.929 0.013 255.508);
 	--ring: oklch(0.704 0.04 256.788);
@@ -86,6 +95,10 @@
 	--destructive: oklch(0.704 0.191 22.216);
 	--warning: oklch(0.769 0.188 70.08);
 	--success: oklch(0.64 0.169 145.386);
+	/* Lighter emphasis text colors tuned for AA on a subtle tint over the dark surface. */
+	--success-emphasis: oklch(0.7 0.15 145.386);
+	--warning-emphasis: oklch(0.775 0.15 70.08);
+	--destructive-emphasis: oklch(0.745 0.16 22.216);
 	--border: oklch(1 0 0 / 10%);
 	--input: oklch(1 0 0 / 15%);
 	--ring: oklch(0.551 0.027 264.364);
@@ -125,8 +138,11 @@
 	--color-accent: var(--accent);
 	--color-accent-foreground: var(--accent-foreground);
 	--color-destructive: var(--destructive);
+	--color-destructive-emphasis: var(--destructive-emphasis);
 	--color-warning: var(--warning);
+	--color-warning-emphasis: var(--warning-emphasis);
 	--color-success: var(--success);
+	--color-success-emphasis: var(--success-emphasis);
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
@@ -154,5 +170,19 @@
 	}
 	body {
 		@apply bg-background text-foreground;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	::before,
+	::after,
+	::backdrop {
+		animation-duration: 0.01ms !important;
+		animation-delay: 0ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		transition-delay: 0ms !important;
+		scroll-behavior: auto !important;
 	}
 }

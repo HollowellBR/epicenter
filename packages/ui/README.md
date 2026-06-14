@@ -88,8 +88,8 @@ The `imports` field enables the `#` prefix for internal module resolution, allow
 This allows consumers to import components like:
 
 ```typescript
-import { Button } from '@epicenter/ui/button';
-import { cn } from '@epicenter/ui/utils';
+import { Button } from '@steno/ui/button';
+import { cn } from '@steno/ui/utils';
 ```
 
 ### 3. Styling Override Pattern

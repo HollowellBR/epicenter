@@ -1,0 +1,62 @@
+{
+	"build": {
+		"beforeBuildCommand": "bun run fetch-llama-server && bun run build",
+		"beforeDevCommand": "bun run dev:web",
+		"frontendDist": "../build",
+		"devUrl": "http://localhost:1420"
+	},
+	"bundle": {
+		"active": true,
+		"resources": [
+			"recorder-state-icons/*",
+			"binaries/*"
+		],
+		"category": "Productivity",
+		"publisher": "Braden Wong",
+		"copyright": "Copyright © 2025 Braden Wong",
+		"targets": "all",
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		],
+		"longDescription": "Lightweight system-tray dictation tool powered by local AI transcription.",
+		"shortDescription": "Press hotkey → speak → get text. Local-only, privacy-first.",
+		"windows": {
+			"webviewInstallMode": {
+				"type": "embedBootstrapper"
+			},
+			"nsis": {
+				"compression": "bzip2",
+				"installMode": "currentUser"
+			}
+		}
+	},
+	"productName": "Steno",
+	"version": "7.11.0",
+	"identifier": "io.steno.app",
+	"app": {
+		"windows": [
+			{
+				"resizable": true,
+				"title": "Steno",
+				"width": 720,
+				"height": 600,
+				"minHeight": 84,
+				"minWidth": 72,
+				"visible": false
+			}
+		],
+		"security": {
+			"csp": null,
+			"assetProtocol": {
+				"enable": true,
+				"scope": [
+					"**"
+				]
+			}
+		}
+	}
+}

@@ -34,8 +34,8 @@ yarn-error.log*
 # Turborepo
 .turbo
 
-# Epicenter
-.epicenter
+# Steno
+.steno
 
 # WXT (browser extension framework)
 .wxt

@@ -15,7 +15,7 @@ import SubTrigger from './dropdown-menu-sub-trigger.svelte';
 import Trigger from './dropdown-menu-trigger.svelte';
 
 const Sub = DropdownMenuPrimitive.Sub;
-const Root = DropdownMenuPrimitive.Root;
+const Root: typeof DropdownMenuPrimitive.Root = DropdownMenuPrimitive.Root;
 
 export {
 	CheckboxGroup,
