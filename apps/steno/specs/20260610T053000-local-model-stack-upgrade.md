@@ -121,3 +121,16 @@ Implemented option 4a: prefer a GPU (Vulkan) llama-server build, fall back to CP
 
 ### macOS note
 "Vulkan as default" is a Windows/Linux story. macOS uses the universal `metal` build (one binary, GPU + internal CPU fallback), installed under `binaries/metal/` and resolved second in the preference order — so no separate CPU build is fetched there.
+
+## Status update (2026-06-22)
+
+**GUI transcription pipeline now verified end-to-end** in the dev app (record → Parakeet transcript → clipboard + paste → DB save), including the first-ever cold model-load (previously only the standalone `transcribe` bin was tested). Two fixes shipped (commit `1f9eed9`, pushed):
+
+- **Cold-start / large-recording failure fixed.** `transcription/local/parakeet.ts` passed audio to `invoke('transcribe_audio_parakeet')` as `Array.from(new Uint8Array(blob))` — a multi-million-element plain JS array Tauri serializes to JSON. For recordings >~3.6 MB this stalled the JS main thread so the invoke never reached Rust (no engine log) and starved the parallel DB save (user saw "saved" toast, then no transcript / no clipboard / empty recordings dir). Fix: pass the `Uint8Array` directly (Tauri v2 raw-bytes → Rust `Vec<u8>`). Verified with a **26 MB cold-start recording** end-to-end.
+- **Warm-load added.** New `preload_parakeet_model` Tauri command (wraps the idempotent `get_or_load_parakeet`), called fire-and-forget from `+layout.svelte` `onMount`, so the first recording skips the ~10 s cold model-load. NB the `ModelManager` 5-min `idle_timeout`/`unload_if_idle()` is **dead code (never called)** — the model stays resident all session, so warm-load is a clean one-time win.
+
+**Other commits this branch (all pushed):** cloud transformation provider `9224fe5`; desktop UI fixes (sidebar/tray/heart) `11c7991`; settings-persistence bug fix `a34dbc2`; ARM64 Snapdragon port prep `522c0a5`. Branch `local-model-stack-gpu` = 7 commits on origin, no PR.
+
+**Hardware direction:** deploying on a **Snapdragon X2 Elite (Windows ARM64)** laptop in cloud-transform mode. Native-ARM64 port is research-confirmed viable (High confidence) — full checklist in **`docs/arm64-port.md`**. Local-LLM caveat: no working Vulkan/Adreno GPU on Windows ARM, so on that machine the (optional) local transform is CPU-only ~12–18 tok/s; transcription stays native + fast.
+
+**Still open:** real `tauri build` bundling per target / in CI; mac/linux fetch branch + Metal; live forced GPU→CPU fallback test; the ARM64 port itself (run when the machine lands).

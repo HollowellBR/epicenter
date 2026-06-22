@@ -46,3 +46,14 @@ Runtime validation — needs a real API key + `bun run dev`:
 4. Confirm preset-switch seeding of `cloud.model` behaves and the password field binds to the right `apiKeys.*` per preset.
 
 Optional fast-follows (not started): native Anthropic adapter (prompt caching / adaptive thinking) instead of the OpenAI-compat layer; native Gemini; cloud as a per-transformation-step override (not just a global default).
+
+## Status update (2026-06-22)
+
+**Committed `9224fe5` + pushed** (branch `local-model-stack-gpu`). Done since the original plan:
+
+- **Test button CONNECTS** against the real Anthropic key. Required two desktop transport fixes (now in `cloud.ts`): route through `@tauri-apps/plugin-http` (Rust fetch, bypasses the webview CORS block on cloud hosts) and send the `anthropic-dangerous-direct-browser-access: true` header. Provider hosts added to the `http:default` capability scope.
+- **Offline-classification fix (in `cloud.ts`):** the original "offline" detection string-matched browser-`fetch` errors, which the desktop reqwest path doesn't emit → a real connectivity failure was misclassified and the opt-in fallback-to-local never fired. Rewrote `complete()` to classify by control flow (the `fetch` threw → no HTTP response → `offline:true`; HTTP error *statuses* resolve and are handled separately → `offline:false`).
+
+**Runtime validation — IN PROGRESS, paused at test 3 of the checklist above.** Test 1 (happy path) passes. Tests 2–5 were initially blocked by a **settings-persistence bug** (the Transformation settings page used Svelte function-binding `bind:value={get,set}` / `bind:checked={get,set}` on bits-ui Select/Switch, whose setter never fires — so provider/URL/key/toggle changes were silently dropped and the transform kept using the stored Anthropic key). Fixed by switching all 5 controls to controlled `value`/`onValueChange` + `checked`/`onCheckedChange`; also fixed a settings.json write race it exposed (serialized the file writes). Committed `a34dbc2`, pushed. **Audit:** other settings pages likely share the same bits-ui binding bug. **Test-panel caveat:** transform errors surface as the run's `status: failed` + `error` field (not a toast); only the real recording→pipeline path toasts.
+
+**Resume:** finish tests 3–5 (fill the Custom Endpoint URL, then offline-off / offline-on→local / 401+on→surfaces). The negative-path logic itself is unchanged and correct; only the UI persistence was blocking it.
