@@ -116,9 +116,15 @@ export const ParakeetTranscriptionServiceLive = {
 			});
 		}
 
-		// Convert audio blob to byte array
+		// Pass the audio bytes as a Uint8Array, NOT `Array.from(...)`. Tauri v2
+		// transfers ArrayBuffer-backed typed arrays over IPC as raw bytes
+		// (deserialized to `Vec<u8>` on the Rust side), whereas a plain number
+		// array is serialized to JSON — for a multi-MB recording that means
+		// millions of elements, which blocks the JS main thread and could stall
+		// the request before it ever reached Rust (the cold-start / longer-recording
+		// transcription failure). Raw bytes keep the IPC fast regardless of length.
 		const arrayBuffer = await audioBlob.arrayBuffer();
-		const audioData = Array.from(new Uint8Array(arrayBuffer));
+		const audioData = new Uint8Array(arrayBuffer);
 
 		// Call Tauri command to transcribe with Parakeet
 		// Note: Parakeet doesn't support language selection, temperature, or prompt

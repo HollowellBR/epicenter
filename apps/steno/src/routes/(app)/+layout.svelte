@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
+	import { invoke } from '@tauri-apps/api/core';
 	import { rpc } from '$lib/query';
 	import { services } from '$lib/services';
 	import { settings } from '$lib/state/settings.svelte';
@@ -44,6 +45,22 @@
 				event.preventDefault();
 				await appWindow.hide();
 			});
+
+			// Warm-load the local transcription model in the background so the
+			// first recording after launch doesn't pay the one-time cold model
+			// load (~10s for the 2.5 GB FP32 model) before any audio is processed.
+			// Fire-and-forget: the Rust command is idempotent and the model stays
+			// resident for the session, so a failure here just falls back to the
+			// existing lazy load on first transcription.
+			if (
+				settings.value['transcription.selectedTranscriptionService'] ===
+				'parakeet'
+			) {
+				const modelPath = settings.value['transcription.parakeet.modelPath'];
+				if (modelPath) {
+					invoke('preload_parakeet_model', { modelPath }).catch(() => {});
+				}
+			}
 		}
 	});
 

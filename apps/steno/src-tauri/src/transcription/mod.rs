@@ -681,6 +681,27 @@ pub async fn transcribe_audio_parakeet(
     Ok(transcript)
 }
 
+/// Warm-load the Parakeet model into memory ahead of the first transcription.
+///
+/// The first transcription after launch otherwise pays a one-time cold load of
+/// the 2.5 GB FP32 model (~10 s) before any audio is processed. Calling this on
+/// startup moves that cost off the user's first recording. It is idempotent —
+/// `get_or_load_parakeet` is a no-op when the requested model is already
+/// resident — so it is safe to call fire-and-forget and to call more than once.
+/// The model stays resident for the session, so a single preload suffices.
+#[tauri::command]
+pub async fn preload_parakeet_model(
+    model_path: String,
+    model_manager: tauri::State<'_, ModelManager>,
+) -> Result<(), TranscriptionError> {
+    info!("[Transcription] preloading Parakeet model: {}", model_path);
+    model_manager
+        .get_or_load_parakeet(PathBuf::from(&model_path))
+        .map_err(|e| TranscriptionError::ModelLoadError { message: e })?;
+    info!("[Transcription] Parakeet model preloaded: {}", model_path);
+    Ok(())
+}
+
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
 pub async fn transcribe_audio_moonshine(

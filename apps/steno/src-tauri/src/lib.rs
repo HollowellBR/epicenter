@@ -9,7 +9,7 @@ use recorder::commands::{
 };
 
 pub mod transcription;
-use transcription::{transcribe_audio_parakeet, ModelManager};
+use transcription::{preload_parakeet_model, transcribe_audio_parakeet, ModelManager};
 
 pub mod windows_path;
 use windows_path::fix_windows_path;
@@ -151,6 +151,7 @@ pub async fn run() {
         stop_recording,
         cancel_recording,
         transcribe_audio_parakeet,
+        preload_parakeet_model,
         send_sigint,
         // Command execution (prevents console window flash on Windows)
         execute_command,
