@@ -22,6 +22,28 @@ import {
  * Provides read-only access to settings values and methods for controlled mutations.
  */
 export const settings = (() => {
+	// Serialize settings.json writes. createPersistedState can fire several
+	// writes in quick succession (e.g. switching the cloud provider also seeds a
+	// default model — two updateKey calls), and the atomic write below shares one
+	// `.tmp` path. Run concurrently, the renames race: the first consumes the tmp
+	// file and the second fails with "cannot find the file" (os error 2). Chaining
+	// the writes guarantees the tmp file is created and renamed without overlap.
+	let settingsFileWriteChain: Promise<void> = Promise.resolve();
+	const writeSettingsFile = (json: string): Promise<void> => {
+		const run = settingsFileWriteChain
+			// A prior failed write must not poison subsequent writes.
+			.catch(() => {})
+			.then(async () => {
+				const { writeTextFile, rename } = await import('@tauri-apps/plugin-fs');
+				const path = await PATHS.SETTINGS_JSON();
+				const tmpPath = `${path}.tmp`;
+				await writeTextFile(tmpPath, json);
+				await rename(tmpPath, path);
+			});
+		settingsFileWriteChain = run;
+		return run;
+	};
+
 	// Private settings instance
 	const _settings = createPersistedState({
 		key: 'steno-settings',
@@ -68,15 +90,7 @@ export const settings = (() => {
 						if (!(await exists(path))) return null;
 						return await readTextFile(path);
 					},
-					write: async (json) => {
-						const { writeTextFile, rename } = await import(
-							'@tauri-apps/plugin-fs'
-						);
-						const path = await PATHS.SETTINGS_JSON();
-						const tmpPath = `${path}.tmp`;
-						await writeTextFile(tmpPath, json);
-						await rename(tmpPath, path);
-					},
+					write: writeSettingsFile,
 				}
 			: undefined,
 	});

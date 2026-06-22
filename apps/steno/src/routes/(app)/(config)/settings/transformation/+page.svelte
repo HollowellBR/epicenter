@@ -135,14 +135,12 @@
 			</Field.Description>
 			<Select.Root
 				type="single"
-				bind:value={
-					() => settings.value['completion.provider'],
-					(v) =>
-						settings.updateKey(
-							'completion.provider',
-							v as 'llamacpp' | 'ollama' | 'cloud',
-						)
-				}
+				value={settings.value['completion.provider']}
+				onValueChange={(v) =>
+					settings.updateKey(
+						'completion.provider',
+						v as 'llamacpp' | 'ollama' | 'cloud',
+					)}
 			>
 				<Select.Trigger id="completion-provider" class="w-full">
 					{providerLabel}
@@ -160,10 +158,9 @@
 		<Field.Field orientation="horizontal">
 			<Switch
 				id="completion-enable-thinking"
-				bind:checked={
-					() => settings.value['completion.enableThinking'],
-					(v) => settings.updateKey('completion.enableThinking', v)
-				}
+				checked={settings.value['completion.enableThinking']}
+				onCheckedChange={(v) =>
+					settings.updateKey('completion.enableThinking', v)}
 			/>
 			<Field.Content>
 				<Field.Label for="completion-enable-thinking">Reasoning</Field.Label>
@@ -186,10 +183,8 @@
 				</Field.Description>
 				<Select.Root
 					type="single"
-					bind:value={
-						() => settings.value['llamacpp.model'],
-						(v) => settings.updateKey('llamacpp.model', v)
-					}
+					value={settings.value['llamacpp.model']}
+					onValueChange={(v) => settings.updateKey('llamacpp.model', v)}
 				>
 					<Select.Trigger id="llamacpp-model" class="w-full">
 						{selectedLlmLabel}
@@ -367,18 +362,16 @@
 				</Field.Description>
 				<Select.Root
 					type="single"
-					bind:value={
-						() => settings.value['cloud.provider'],
-						(v) => {
-							const next =
-								CLOUD_PRESETS.find((p) => p.id === v) ?? CLOUD_PRESETS[0];
-							settings.updateKey('cloud.provider', next.id);
-							// Seed a sensible default model when switching presets.
-							if (next.defaultModel) {
-								settings.updateKey('cloud.model', next.defaultModel);
-							}
+					value={settings.value['cloud.provider']}
+					onValueChange={(v) => {
+						const next =
+							CLOUD_PRESETS.find((p) => p.id === v) ?? CLOUD_PRESETS[0];
+						settings.updateKey('cloud.provider', next.id);
+						// Seed a sensible default model when switching presets.
+						if (next.defaultModel) {
+							settings.updateKey('cloud.model', next.defaultModel);
 						}
-					}
+					}}
 				>
 					<Select.Trigger id="cloud-provider" class="w-full">
 						{cloudPresetLabel}
@@ -469,10 +462,9 @@
 			<Field.Field orientation="horizontal">
 				<Switch
 					id="cloud-fallback"
-					bind:checked={
-						() => settings.value['completion.cloudFallbackToLocal'],
-						(v) => settings.updateKey('completion.cloudFallbackToLocal', v)
-					}
+					checked={settings.value['completion.cloudFallbackToLocal']}
+					onCheckedChange={(v) =>
+						settings.updateKey('completion.cloudFallbackToLocal', v)}
 				/>
 				<Field.Content>
 					<Field.Label for="cloud-fallback">Fall back to local model</Field.Label>
