@@ -39,13 +39,24 @@ const FORCE = process.argv.includes('--force');
 
 // macOS ships one universal build (Metal + CPU). Windows/Linux get a GPU build
 // (Vulkan: works on NVIDIA/AMD/Intel) plus a plain CPU build as a safe fallback.
+// Default GPU+CPU variant list for Windows/Linux (macOS is handled separately).
+function defaultNonDarwinVariants(): string[] {
+	// Windows on ARM64 (Snapdragon / Adreno): llama.cpp publishes NO win-vulkan
+	// arm64 asset, and Vulkan on Adreno/Windows is broken anyway, so ship the
+	// reliable CPU build. (The arm64 GPU build is `opencl-adreno`, but it's
+	// experimental and often loses to CPU on Snapdragon X — opt in explicitly via
+	// LLAMA_CPP_VARIANT=opencl-adreno,cpu if you want to try it.)
+	if (process.platform === 'win32' && process.arch === 'arm64') return ['cpu'];
+	// Windows / Linux x64: Vulkan GPU build (NVIDIA/AMD/Intel) + CPU fallback.
+	return ['vulkan', 'cpu'];
+}
+
 const VARIANTS: string[] =
 	process.platform === 'darwin'
 		? ['metal']
-		: (process.env.LLAMA_CPP_VARIANT
-				?.split(',')
+		: (process.env.LLAMA_CPP_VARIANT?.split(',')
 				.map((s) => s.trim())
-				.filter(Boolean) ?? ['vulkan', 'cpu']);
+				.filter(Boolean) ?? defaultNonDarwinVariants());
 
 const BINARIES_DIR = resolve(import.meta.dir, '../src-tauri/binaries');
 const isWindows = process.platform === 'win32';
