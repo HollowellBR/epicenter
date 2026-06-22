@@ -173,7 +173,7 @@
 			Steno
 		</h1>
 		<p class="text-muted-foreground text-center">
-			Press shortcut → speak → get text. Free and open source ❤️
+			Press shortcut → speak → get text. Free and open source.
 		</p>
 	</div>
 

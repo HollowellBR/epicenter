@@ -12,7 +12,10 @@
 
 	let { children } = $props();
 
-	let sidebarOpen = $state(false);
+	// Default-open so the full labeled sidebar is visible on launch. Combined
+	// with the low Provider breakpoint below, the nav no longer hides into an
+	// off-canvas mobile sheet at the app's narrow default window width.
+	let sidebarOpen = $state(true);
 	let unlistenNavigate: UnlistenFn | null = null;
 
 	$effect(() => {
@@ -49,7 +52,14 @@
 	});
 </script>
 
-<Sidebar.Provider bind:open={sidebarOpen}>
+<!--
+	breakpoint=640 to match the sidebar's `sm:` desktop CSS gate (lowered from the
+	stock `md`/768 so the persistent sidebar shows at the app's ~720px window
+	instead of disappearing into an off-canvas sheet). The JS `isMobile` threshold
+	and the CSS breakpoint must agree: below 640 → mobile sheet, at/above 640 →
+	persistent desktop sidebar. The 72px mini mode falls below it (mic only).
+-->
+<Sidebar.Provider bind:open={sidebarOpen} breakpoint={640}>
 	{#if settings.value['ui.layoutMode'] === 'sidebar'}
 		<VerticalNav />
 	{/if}

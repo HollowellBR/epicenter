@@ -18,6 +18,15 @@ export type SidebarStateProps = {
 	 * the sub-components and any `bind:` references.
 	 */
 	setOpen: (open: boolean) => void;
+
+	/**
+	 * A getter for the viewport width (px) below which the sidebar switches to
+	 * the off-canvas "mobile" sheet. Defaults to 768 when omitted. Apps with a
+	 * narrow main window can lower this so the icon rail stays persistently
+	 * visible instead of collapsing to a hidden sheet with no trigger. A getter
+	 * (matching `open`) keeps it reactive-safe.
+	 */
+	breakpoint?: Getter<number | undefined>;
 };
 
 class SidebarState {
@@ -30,7 +39,7 @@ class SidebarState {
 
 	constructor(props: SidebarStateProps) {
 		this.setOpen = props.setOpen;
-		this.#isMobile = new IsMobile();
+		this.#isMobile = new IsMobile(props.breakpoint?.());
 		this.props = props;
 	}
 

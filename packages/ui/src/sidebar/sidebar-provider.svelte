@@ -14,6 +14,7 @@
 		ref = $bindable(null),
 		open = $bindable(true),
 		onOpenChange = () => {},
+		breakpoint,
 		class: className,
 		style,
 		children,
@@ -21,9 +22,11 @@
 	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		open?: boolean;
 		onOpenChange?: (open: boolean) => void;
+		breakpoint?: number;
 	} = $props();
 
 	const sidebar = setSidebar({
+		breakpoint: () => breakpoint,
 		open: () => open,
 		setOpen: (value: boolean) => {
 			open = value;
