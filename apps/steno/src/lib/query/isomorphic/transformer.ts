@@ -9,6 +9,7 @@ import {
 	type StenoResult,
 } from '$lib/result';
 import { services } from '$lib/services';
+import { CLOUD_PRESETS } from '$lib/constants/inference/cloud-presets';
 import type {
 	Transformation,
 	TransformationRunCompleted,
@@ -171,11 +172,13 @@ async function handleStep({
 		case 'prompt_transform': {
 			const provider = settings.value['completion.provider'];
 
-			// Default system prompt depends on the active local backend.
+			// Default system prompt depends on the active backend.
 			const defaultPrompt =
 				provider === 'llamacpp'
 					? settings.value['llamacpp.defaultPrompt']
-					: settings.value['ollama.defaultPrompt'];
+					: provider === 'ollama'
+						? settings.value['ollama.defaultPrompt']
+						: settings.value['cloud.defaultPrompt'];
 
 			const systemTemplate =
 				step['prompt_transform.systemPromptTemplate'] || defaultPrompt;
@@ -191,7 +194,9 @@ async function handleStep({
 				{ input },
 			);
 
-			if (provider === 'llamacpp') {
+			// Local llama.cpp path, factored out so the cloud provider can reuse
+			// it as an opt-in offline fallback.
+			const runLlamaCpp = async (): Promise<Result<string, string>> => {
 				// serverPath may be empty: the Rust side falls back to the
 				// llama-server binary bundled with the app.
 				const serverPath = settings.value['llamacpp.serverPath'];
@@ -225,6 +230,50 @@ async function handleStep({
 					userPrompt,
 					enableThinking: settings.value['completion.enableThinking'],
 				});
+			};
+
+			if (provider === 'llamacpp') {
+				return runLlamaCpp();
+			}
+
+			if (provider === 'cloud') {
+				const presetId = settings.value['cloud.provider'];
+				const preset =
+					CLOUD_PRESETS.find((p) => p.id === presetId) ?? CLOUD_PRESETS[0];
+				// Custom presets carry their own base URL; the rest are fixed.
+				const baseUrl =
+					(preset.id === 'Custom'
+						? settings.value['cloud.baseUrl']
+						: preset.baseUrl) || '';
+
+				if (!baseUrl) {
+					return Err(
+						'No endpoint URL set for the custom cloud provider. Add one in Settings → Transformation.',
+					);
+				}
+
+				const result =
+					await services.completions.CloudCompletionServiceLive.complete({
+						baseUrl,
+						apiKey: settings.value[preset.apiKeyField],
+						model: settings.value['cloud.model'],
+						systemPrompt,
+						userPrompt,
+					});
+
+				if (isErr(result)) {
+					// Fall back to the local model only on connectivity failures, and
+					// only when the user opted in — auth/rate-limit errors surface so a
+					// bad key or quota issue isn't silently masked.
+					if (
+						settings.value['completion.cloudFallbackToLocal'] &&
+						result.error.offline
+					) {
+						return runLlamaCpp();
+					}
+					return Err(result.error.message);
+				}
+				return Ok(result.data);
 			}
 
 			// Ollama (optional). Per-step Custom overrides fall back to global settings.

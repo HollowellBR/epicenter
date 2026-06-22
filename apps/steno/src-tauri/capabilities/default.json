@@ -128,7 +128,11 @@
       "allow": [
         { "url": "https://github.com/**" },
         { "url": "https://objects.githubusercontent.com/**" },
-        { "url": "http://localhost:**" }
+        { "url": "http://localhost:**" },
+        { "url": "https://api.anthropic.com/**" },
+        { "url": "https://api.openai.com/**" },
+        { "url": "https://api.groq.com/**" },
+        { "url": "https://openrouter.ai/**" }
       ]
     }
   ]

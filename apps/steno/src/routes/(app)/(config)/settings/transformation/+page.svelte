@@ -8,8 +8,13 @@
 	import { Textarea } from '@steno/ui/textarea';
 	import { invoke } from '@tauri-apps/api/core';
 	import { isErr } from 'wellcrafted/result';
+	import { CloudCompletionServiceLive } from '$lib/services/isomorphic/completion/cloud';
 	import { OllamaCompletionServiceLive } from '$lib/services/isomorphic/completion/ollama';
 	import { LLM_MODELS } from '$lib/services/isomorphic/completion/local/qwen';
+	import {
+		CLOUD_PRESETS,
+		CLOUD_PRESET_OPTIONS,
+	} from '$lib/constants/inference/cloud-presets';
 	import { llmDownload } from '$lib/state/llm-download.svelte';
 	import { settings } from '$lib/state/settings.svelte';
 
@@ -19,12 +24,20 @@
 	const PROVIDER_OPTIONS = [
 		{ value: 'llamacpp', label: 'Bundled llama.cpp (recommended)' },
 		{ value: 'ollama', label: 'Ollama (bring your own)' },
+		{ value: 'cloud', label: 'Cloud (OpenAI-compatible)' },
 	] as const;
 
 	const provider = $derived(settings.value['completion.provider']);
 	const providerLabel = $derived(
 		PROVIDER_OPTIONS.find((o) => o.value === provider)?.label ?? 'Select',
 	);
+
+	// Cloud provider preset (Anthropic/OpenAI/Groq/OpenRouter/Custom).
+	const cloudPreset = $derived(
+		CLOUD_PRESETS.find((p) => p.id === settings.value['cloud.provider']) ??
+			CLOUD_PRESETS[0],
+	);
+	const cloudPresetLabel = $derived(cloudPreset.label);
 
 	const selectedLlm = $derived(
 		LLM_MODELS.find((m) => m.id === settings.value['llamacpp.model']) ??
@@ -49,6 +62,34 @@
 		} else {
 			connectionStatus = 'success';
 			connectionMessage = `Connected. ${result.data.length} model${result.data.length === 1 ? '' : 's'} available.`;
+		}
+	}
+
+	async function testCloud() {
+		connectionStatus = 'testing';
+		connectionMessage = '';
+		const baseUrl =
+			(cloudPreset.id === 'Custom'
+				? settings.value['cloud.baseUrl']
+				: cloudPreset.baseUrl) || '';
+		if (!baseUrl) {
+			connectionStatus = 'error';
+			connectionMessage = 'Set an endpoint URL first.';
+			return;
+		}
+		const result = await CloudCompletionServiceLive.complete({
+			baseUrl,
+			apiKey: settings.value[cloudPreset.apiKeyField],
+			model: settings.value['cloud.model'],
+			systemPrompt: 'You are a connection test. Reply with OK.',
+			userPrompt: 'ping',
+		});
+		if (isErr(result)) {
+			connectionStatus = 'error';
+			connectionMessage = result.error.message;
+		} else {
+			connectionStatus = 'success';
+			connectionMessage = 'Connected. The cloud provider responded.';
 		}
 	}
 
@@ -89,7 +130,8 @@
 			<Field.Label for="completion-provider">Backend</Field.Label>
 			<Field.Description>
 				The bundled llama.cpp server runs Qwen3 locally with no extra install.
-				Ollama is optional if you already run it.
+				Ollama is optional if you already run it. Cloud sends transcript text
+				to an OpenAI-compatible API — faster, but it leaves your device.
 			</Field.Description>
 			<Select.Root
 				type="single"
@@ -98,7 +140,7 @@
 					(v) =>
 						settings.updateKey(
 							'completion.provider',
-							v as 'llamacpp' | 'ollama',
+							v as 'llamacpp' | 'ollama' | 'cloud',
 						)
 				}
 			>
@@ -231,7 +273,7 @@
 					placeholder="Fix grammar and punctuation"
 				/>
 			</Field.Field>
-		{:else}
+		{:else if provider === 'ollama'}
 			<Field.Separator />
 
 			<Field.Field>
@@ -302,6 +344,160 @@
 					value={settings.value['ollama.defaultPrompt']}
 					oninput={(e) =>
 						settings.updateKey('ollama.defaultPrompt', e.currentTarget.value)}
+					rows={3}
+					placeholder="Fix grammar and punctuation"
+				/>
+			</Field.Field>
+		{:else}
+			<Field.Separator />
+
+			<div
+				class="border-amber-500/40 bg-amber-500/10 text-foreground rounded-md border p-3 text-sm"
+			>
+				<strong>Heads up:</strong> with a cloud backend, the transcript text is
+				sent to the provider you choose for cleanup. Audio and transcription
+				stay on your device — only the transform step uses the cloud.
+			</div>
+
+			<Field.Field>
+				<Field.Label for="cloud-provider">Provider</Field.Label>
+				<Field.Description>
+					Anthropic (Claude Haiku) is recommended — fast, low-cost, and strong
+					on data privacy. Choose Custom for any other OpenAI-compatible API.
+				</Field.Description>
+				<Select.Root
+					type="single"
+					bind:value={
+						() => settings.value['cloud.provider'],
+						(v) => {
+							const next =
+								CLOUD_PRESETS.find((p) => p.id === v) ?? CLOUD_PRESETS[0];
+							settings.updateKey('cloud.provider', next.id);
+							// Seed a sensible default model when switching presets.
+							if (next.defaultModel) {
+								settings.updateKey('cloud.model', next.defaultModel);
+							}
+						}
+					}
+				>
+					<Select.Trigger id="cloud-provider" class="w-full">
+						{cloudPresetLabel}
+					</Select.Trigger>
+					<Select.Content>
+						{#each CLOUD_PRESET_OPTIONS as opt}
+							<Select.Item value={opt.value} label={opt.label} />
+						{/each}
+					</Select.Content>
+				</Select.Root>
+			</Field.Field>
+
+			{#if cloudPreset.id === 'Custom'}
+				<Field.Separator />
+
+				<Field.Field>
+					<Field.Label for="cloud-base-url">Endpoint URL</Field.Label>
+					<Field.Description>
+						Base URL of the OpenAI-compatible API (the part before
+						<code class="bg-muted rounded px-1">/chat/completions</code>).
+					</Field.Description>
+					<Input
+						id="cloud-base-url"
+						value={settings.value['cloud.baseUrl']}
+						oninput={(e) =>
+							settings.updateKey('cloud.baseUrl', e.currentTarget.value)}
+						placeholder="https://api.example.com/v1"
+					/>
+				</Field.Field>
+			{/if}
+
+			<Field.Separator />
+
+			<Field.Field>
+				<Field.Label for="cloud-api-key">API Key</Field.Label>
+				<Field.Description>
+					Stored locally on this device and sent only to the selected provider.
+				</Field.Description>
+				<div class="flex gap-2">
+					<Input
+						id="cloud-api-key"
+						type="password"
+						value={settings.value[cloudPreset.apiKeyField]}
+						oninput={(e) =>
+							settings.updateKey(cloudPreset.apiKeyField, e.currentTarget.value)}
+						placeholder="sk-…"
+						class="flex-1"
+					/>
+					<Button
+						variant="outline"
+						onclick={testCloud}
+						loading={connectionStatus === 'testing'}
+						disabled={connectionStatus === 'testing'}
+					>
+						Test
+					</Button>
+				</div>
+				{#if connectionMessage}
+					<p
+						class={connectionStatus === 'error'
+							? 'text-destructive text-sm'
+							: 'text-sm text-success'}
+					>
+						{connectionMessage}
+					</p>
+				{/if}
+			</Field.Field>
+
+			<Field.Separator />
+
+			<Field.Field>
+				<Field.Label for="cloud-model">Model</Field.Label>
+				<Field.Description>
+					Exact model id for the provider (e.g.
+					<code class="bg-muted rounded px-1">claude-haiku-4-5</code>).
+				</Field.Description>
+				<Input
+					id="cloud-model"
+					value={settings.value['cloud.model']}
+					oninput={(e) =>
+						settings.updateKey('cloud.model', e.currentTarget.value)}
+					placeholder="claude-haiku-4-5"
+				/>
+			</Field.Field>
+
+			<Field.Separator />
+
+			<Field.Field orientation="horizontal">
+				<Switch
+					id="cloud-fallback"
+					bind:checked={
+						() => settings.value['completion.cloudFallbackToLocal'],
+						(v) => settings.updateKey('completion.cloudFallbackToLocal', v)
+					}
+				/>
+				<Field.Content>
+					<Field.Label for="cloud-fallback">Fall back to local model</Field.Label>
+					<Field.Description>
+						If the cloud provider can't be reached (offline), run the transform
+						on the bundled local model instead of failing. Authentication and
+						rate-limit errors are always surfaced, never silently retried.
+					</Field.Description>
+				</Field.Content>
+			</Field.Field>
+
+			<Field.Separator />
+
+			<Field.Field>
+				<Field.Label for="cloud-default-prompt">
+					Default Transformation Prompt
+				</Field.Label>
+				<Field.Description>
+					System prompt used when a transformation step has no custom prompt.
+				</Field.Description>
+				<Textarea
+					id="cloud-default-prompt"
+					value={settings.value['cloud.defaultPrompt']}
+					oninput={(e) =>
+						settings.updateKey('cloud.defaultPrompt', e.currentTarget.value)}
 					rows={3}
 					placeholder="Fix grammar and punctuation"
 				/>

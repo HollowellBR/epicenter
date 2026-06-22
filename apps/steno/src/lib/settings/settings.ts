@@ -211,16 +211,23 @@ export const Settings = type({
 	'voiceCommands.showNotification': 'boolean = true',
 	'sound.playOn.voiceCommandExecuted': 'boolean = true',
 
-	// Local completion backend selection (used by the transformation pipeline).
+	// Completion backend selection (used by the transformation pipeline).
 	// 'llamacpp' = bundled llama.cpp llama-server (zero-setup default);
-	// 'ollama'   = user's own Ollama install (optional).
-	'completion.provider': "'llamacpp' | 'ollama' = 'llamacpp'",
+	// 'ollama'   = user's own Ollama install (optional, local);
+	// 'cloud'    = an OpenAI-compatible cloud API (opt-in; sends transcript
+	//              text off-device — never used for transcription).
+	'completion.provider': "'llamacpp' | 'ollama' | 'cloud' = 'llamacpp'",
 
 	// Let the model "think" (emit reasoning tokens) before answering. Off by
 	// default: transforms are simple instruction-following (grammar/rewrite), so
-	// thinking just adds large latency for no quality gain. Applies to both
-	// backends (llama.cpp `enable_thinking`, Ollama `think`).
+	// thinking just adds large latency for no quality gain. Applies to the local
+	// backends (llama.cpp `enable_thinking`, Ollama `think`); ignored by cloud.
 	'completion.enableThinking': 'boolean = false',
+
+	// When the 'cloud' provider can't be reached (offline / DNS / refused),
+	// fall back to the bundled local model instead of erroring. Off by default
+	// so behavior is explicit; auth/rate-limit errors never trigger fallback.
+	'completion.cloudFallbackToLocal': 'boolean = false',
 
 	// Bundled llama.cpp (llama-server) settings
 	'llamacpp.serverPath': "string = ''", // path to the llama-server binary
@@ -235,6 +242,17 @@ export const Settings = type({
 	'ollama.baseUrl': "string = 'http://localhost:11434'",
 	'ollama.model': "string = 'qwen3:8b'",
 	'ollama.defaultPrompt': "string = 'Fix grammar and punctuation'",
+
+	// Cloud completion settings (opt-in OpenAI-compatible backend).
+	// 'cloud.provider' is a preset id from constants/inference/cloud-presets
+	// (Anthropic | OpenAI | Groq | OpenRouter | Custom). The API key is read
+	// from the matching apiKeys.* setting; 'cloud.baseUrl' is used only for the
+	// Custom preset. Default is Anthropic + Claude Haiku 4.5.
+	'cloud.provider':
+		"'Anthropic' | 'OpenAI' | 'Groq' | 'OpenRouter' | 'Custom' = 'Anthropic'",
+	'cloud.model': "string = 'claude-haiku-4-5'",
+	'cloud.baseUrl': "string = ''", // only used when cloud.provider === 'Custom'
+	'cloud.defaultPrompt': "string = 'Fix grammar and punctuation'",
 
 	// Local shortcuts (in-app shortcuts)
 	'shortcuts.local.toggleManualRecording': "string | null = ' '",
