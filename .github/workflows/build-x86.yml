@@ -1,0 +1,108 @@
+name: Build Steno (Windows x64)
+
+# Builds the x86_64-pc-windows-msvc Steno installers (MSI + NSIS) on a GitHub-hosted
+# windows-latest runner and uploads them as artifacts. This is the clean-room,
+# repeatable counterpart to the local `bun run tauri build` on the RTX workstation —
+# download the artifact and install on any x64 Windows machine.
+#
+# The bundled llama-server includes the Vulkan (GPU) variant + a CPU fallback (pinned
+# llama.cpp b9628). The GPU is only needed at RUNTIME (end-user's NVIDIA/AMD/Intel GPU),
+# so a GPU-less CI runner builds the installers just fine.
+#
+# Unlike the arm64 workflow, x64 needs no native-Bun workaround (setup-bun gives a
+# native x64 Bun so process.arch is already "x64") and no LLVM step (ring ships
+# prebuilt asm for x86_64-pc-windows-msvc). Installers are UNSIGNED (SmartScreen
+# "unknown publisher" on first run); fine for personal use.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [local-model-stack-gpu]
+    paths:
+      - 'apps/steno/**'
+      - 'packages/config/**'
+      - 'packages/constants/**'
+      - 'packages/shared/**'
+      - 'packages/svelte-utils/**'
+      - 'packages/ui/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/build-x86.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-x86-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: x64 build + MSI/NSIS installers
+    runs-on: windows-latest
+    env:
+      # Raises the llama.cpp GitHub API rate limit inside fetch-llama-server.
+      GITHUB_TOKEN: ${{ github.token }}
+      RUST_BACKTRACE: '1'
+
+    steps:
+      # Full checkout — the root workspaces list is narrowed to the Steno members, so it
+      # resolves cleanly and this job also guards the fresh-clone install path.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust (x86_64-pc-windows-msvc)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/steno/src-tauri
+
+      - name: Install JS dependencies
+        shell: pwsh
+        # --no-frozen-lockfile: the committed bun.lock is intentionally pinned to the
+        # x86 golden baseline (apps/steno/scripts/x86-golden-baseline.json hashes it),
+        # so it is not regenerated to be frozen-consistent.
+        run: bun install --no-frozen-lockfile
+
+      - name: Build app + installers (x64, MSI + NSIS)
+        working-directory: apps/steno
+        shell: pwsh
+        # beforeBuildCommand runs fetch-llama-server (pulls win-vulkan-x64 + win-cpu-x64
+        # llama-server, pinned b9628) + the Vite frontend build. Default target is
+        # x86_64-pc-windows-msvc; default bundle targets emit both MSI (WiX) and NSIS.
+        run: bun run tauri build
+
+      - name: x86 golden-baseline guard
+        working-directory: apps/steno
+        shell: pwsh
+        # Confirms the x86 + RTX GPU stack is untouched: bundle targets stay "all",
+        # gpuLayers=99, vulkan-first, pinned llama.cpp, and the bundled Vulkan DLL +
+        # lockfile hashes match the recorded baseline (binaries are present post-build).
+        run: bun test scripts/x86-baseline-guard.test.ts
+
+      - name: Locate installers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi  = Get-ChildItem 'apps/steno/src-tauri/target/release/bundle/msi'  -Filter '*.msi'       -ErrorAction Stop | Select-Object -First 1
+          $nsis = Get-ChildItem 'apps/steno/src-tauri/target/release/bundle/nsis' -Filter '*-setup.exe' -ErrorAction Stop | Select-Object -First 1
+          if (-not $msi)  { throw 'No MSI installer found' }
+          if (-not $nsis) { throw 'No NSIS installer found' }
+          Write-Host "MSI:  $($msi.FullName)  ($([math]::Round($msi.Length/1MB,1)) MB)"
+          Write-Host "NSIS: $($nsis.FullName) ($([math]::Round($nsis.Length/1MB,1)) MB)"
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: steno-windows-x64-installers
+          path: |
+            apps/steno/src-tauri/target/release/bundle/msi/*.msi
+            apps/steno/src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
