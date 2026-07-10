@@ -65,9 +65,10 @@ these docs.
      cfg-exclusion is needed** — the additive / zero-shared-source-edits property
      holds. (Optional trim: `--bin steno` skips building the test-only CLI, but it
      isn't required for a green build.)
-3. **Phase 1** — run the checklist below on the Yoga Slim 7x: fresh clone, LLVM/Clang +
-   VS2022 ARM64 C++ tools, `bun run tauri build --target aarch64-pc-windows-msvc
-   --bundles nsis`, cloud-transform (Anthropic) as default.
+3. **Phase 1 — the ARM *build* is now CI-proven (green).** What remains is **on-device**:
+   install the `build-arm64.yml` NSIS artifact on the Yoga (no toolchain needed) — or build
+   locally per the checklist below — then run the §"On-device smoke test" with cloud-transform
+   (Anthropic/Haiku) as default.
 
 **Guard reminder:** before any x86 release, run `bun test scripts/x86-baseline-guard.test.ts`
 (green = the x86 + RTX GPU stack is provably untouched).
@@ -76,15 +77,25 @@ these docs.
 
 ## Build in CI (recommended — keeps the Yoga toolchain-free)
 
+**✅ PROVEN GREEN (2026-07-09):** the workflow builds a native `aarch64-pc-windows-msvc` NSIS
+installer end-to-end on the `windows-11-arm` runner (artifact `steno-windows-arm64-nsis`,
+~29 MB). So **Phase 1's build half is validated in CI** — the only remaining Phase-1 work is the
+on-device install + smoke test on the Yoga (§"On-device smoke test"). Matching **x86**
+(`build-x86.yml` → MSI+NSIS) and a tag-triggered **`release.yml`** (both arches → GitHub Release)
+workflows also exist.
+
 `.github/workflows/build-arm64.yml` builds a **native `aarch64-pc-windows-msvc`** Steno
 installer on a GitHub-hosted **`windows-11-arm`** runner (GA + free for this public repo).
 You download the NSIS `.exe` artifact and just run it on the Yoga — **no Visual Studio /
 LLVM / Rust / Bun on the device**, only the pre-installed WebView2. The installer is
 **unsigned** (SmartScreen "unknown publisher" on first launch); fine for personal use.
 
-**Trigger:** any push to `local-model-stack-gpu` touching `apps/steno/**` (or the workflow
-file) builds automatically; the manual "Run workflow" (`workflow_dispatch`) button only
-appears once this file is also on the default branch (`main`).
+**Trigger:** any push to `local-model-stack-gpu` touching the Steno paths (or the workflow
+file); the manual "Run workflow" (`workflow_dispatch`) button appears once the file is also on
+`main`. The job does a **full checkout** — the root `workspaces` list was narrowed to the Steno
+members and the dead upstream `@epicenter/*` members were deleted, so a fresh clone installs
+cleanly — and installs with `bun install --no-frozen-lockfile` (committed `bun.lock` is pinned
+to the x86 golden baseline).
 
 **The one non-obvious correctness guard:** `scripts/fetch-llama-server.ts` derives the
 sidecar arch purely from `process.arch`, and `oven-sh/setup-bun` still falls back to **x64**
@@ -193,10 +204,13 @@ dictation** (push-to-talk / toggle hotkeys), so it can be deferred or left disab
 
 ---
 
-## Already done (this commit)
+## Already done
 
-`scripts/fetch-llama-server.ts` — the default variant list is now arch-aware: Windows ARM64 fetches
-`cpu` (not the nonexistent `vulkan` asset). x64 Windows/Linux and macOS are unchanged.
+- `scripts/fetch-llama-server.ts` — arch-aware default variant list (win-arm64 → `cpu`; x64/linux → `vulkan,cpu`) + pinned llama.cpp `b9628`.
+- Phase 0 x86 golden baseline + invariant guard (committed) — see [`x86-golden-baseline.md`](./x86-golden-baseline.md).
+- Phase-1 prep unknowns resolved: `ort 2.0.0-rc.10` ships a prebuilt aarch64-win ONNX Runtime; the `transcribe` `[[bin]]` is build-safe (runtime-only ffmpeg).
+- **ARM CI build proven green** (`build-arm64.yml` → native aarch64 NSIS installer) + x86 CI (`build-x86.yml` → MSI+NSIS) + tag-triggered release pipeline (`release.yml`, both arches → GitHub Release).
+- Monorepo cleanup: root `workspaces` narrowed to the Steno members; dead `@epicenter/*` members + the inherited whispering/epicenter CI workflows removed → repo is **Steno-only** and a fresh full clone installs cleanly.
 
 ---
 

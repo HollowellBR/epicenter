@@ -71,3 +71,16 @@ The full `bun run tauri build` on this workstation ran clean: **MSI + NSIS both 
 pinned `b9628` fetch integrated. `bun test scripts/x86-baseline-guard.test.ts` is
 green (**17 pass / 0 fail**). Everything else (pin, hashes, live GPU benchmark, guard +
 self-tests) was already done — **Phase 0 is fully complete.**
+
+## x86 in CI + install packages (2026-07-09)
+
+`.github/workflows/build-x86.yml` builds the x64 installers (MSI + NSIS) clean-room on
+`windows-latest` → artifact `steno-windows-x64-installers` (~116 MB); a tag-triggered
+`release.yml` builds both arches and attaches installers to a GitHub Release.
+
+**The CI does NOT run this guard.** Its `Cargo.lock`/`bun.lock` + DLL hash checks are
+build-environment-sensitive — a different CI cargo re-serializes `Cargo.lock`, which
+false-fails the hash assertion (observed once, then removed from `build-x86.yml`). The
+guard is therefore a **workstation release-gate**: run it on the RTX box before shipping.
+Its value is the deterministic value checks + the live GPU benchmark, both of which are
+workstation concerns.
