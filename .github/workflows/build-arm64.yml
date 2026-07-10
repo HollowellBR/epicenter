@@ -24,6 +24,13 @@ on:
     branches: [local-model-stack-gpu]
     paths:
       - 'apps/steno/**'
+      - 'packages/config/**'
+      - 'packages/constants/**'
+      - 'packages/shared/**'
+      - 'packages/svelte-utils/**'
+      - 'packages/ui/**'
+      - 'package.json'
+      - 'bun.lock'
       - '.github/workflows/build-arm64.yml'
 
 permissions:
@@ -43,24 +50,15 @@ jobs:
       RUST_BACKTRACE: '1'
 
     steps:
-      # Sparse-checkout only steno + its @steno/* workspace packages. A FULL checkout
-      # of this monorepo fails `bun install`: several other workspace members
-      # (apps/epicenter, apps/fs-explorer, apps/tab-manager, packages/filesystem,
-      # packages/server) declare a `@epicenter/hq: workspace:*` dep on a package that
-      # isn't in this repo. Locally that never bites because the dev tree is sparse and
-      # those members aren't on disk; we reproduce that here. steno's real deps are
-      # @steno/{config,ui,constants,shared,svelte-utils} (ui→config), plus the `#` ->
-      # packages/ui/src alias in svelte.config.js. Cone mode always includes root files.
-      - name: Checkout (steno + its workspace packages only)
+      # Full checkout. The root package.json `workspaces` list was narrowed to the Steno
+      # members only (apps/steno + packages/{config,constants,shared,svelte-utils,ui}),
+      # so a full checkout now resolves cleanly. This job therefore doubles as a guard
+      # against a fresh-clone regression: if the workspace globs were ever re-broadened
+      # to re-include the dead @epicenter/* members (which reference 4 non-existent
+      # packages — @epicenter/{hq,ui,config,constants}), `bun install` below would fail
+      # here just like a fresh full clone would.
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            apps/steno
-            packages/config
-            packages/constants
-            packages/shared
-            packages/svelte-utils
-            packages/ui
 
       - name: Install native ARM64 Bun
         shell: pwsh
@@ -118,8 +116,10 @@ jobs:
 
       - name: Install JS dependencies
         shell: pwsh
-        # --no-frozen-lockfile: Bun auto-freezes the lockfile under CI, which would
-        # reject the reduced (sparse) workspace set; the dev machine installs non-frozen.
+        # --no-frozen-lockfile: the committed bun.lock is intentionally pinned to the
+        # x86 golden baseline (apps/steno/scripts/x86-golden-baseline.json hashes it), so
+        # it is NOT regenerated to be frozen-consistent. A non-frozen install resolves
+        # the 6 Steno workspace members cleanly (verified against a fresh full clone).
         run: bun install --no-frozen-lockfile
 
       - name: Build app + NSIS installer (native arm64)
