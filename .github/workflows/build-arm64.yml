@@ -43,8 +43,24 @@ jobs:
       RUST_BACKTRACE: '1'
 
     steps:
-      - name: Checkout
+      # Sparse-checkout only steno + its @steno/* workspace packages. A FULL checkout
+      # of this monorepo fails `bun install`: several other workspace members
+      # (apps/epicenter, apps/fs-explorer, apps/tab-manager, packages/filesystem,
+      # packages/server) declare a `@epicenter/hq: workspace:*` dep on a package that
+      # isn't in this repo. Locally that never bites because the dev tree is sparse and
+      # those members aren't on disk; we reproduce that here. steno's real deps are
+      # @steno/{config,ui,constants,shared,svelte-utils} (ui→config), plus the `#` ->
+      # packages/ui/src alias in svelte.config.js. Cone mode always includes root files.
+      - name: Checkout (steno + its workspace packages only)
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            apps/steno
+            packages/config
+            packages/constants
+            packages/shared
+            packages/svelte-utils
+            packages/ui
 
       - name: Install native ARM64 Bun
         shell: pwsh
@@ -102,7 +118,9 @@ jobs:
 
       - name: Install JS dependencies
         shell: pwsh
-        run: bun install
+        # --no-frozen-lockfile: Bun auto-freezes the lockfile under CI, which would
+        # reject the reduced (sparse) workspace set; the dev machine installs non-frozen.
+        run: bun install --no-frozen-lockfile
 
       - name: Build app + NSIS installer (native arm64)
         working-directory: apps/steno
