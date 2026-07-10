@@ -1,0 +1,153 @@
+name: Release Steno (Windows)
+
+# Tag-triggered release pipeline. Builds native Windows installers for BOTH
+# architectures and attaches them to a GitHub Release:
+#   - x64   (windows-latest,   x86_64-pc-windows-msvc) -> MSI + NSIS
+#   - arm64 (windows-11-arm,    aarch64-pc-windows-msvc) -> NSIS (MSI unsupported on ARM)
+#
+# Trigger by pushing a version tag, e.g.:  git tag v7.11.0 && git push origin v7.11.0
+# or run manually (workflow_dispatch) against an existing tag.
+#
+# Installers are UNSIGNED (SmartScreen "unknown publisher"); fine for personal use.
+# The Release is created as a DRAFT with the installers attached — review the assets
+# and click "Publish", or set `draft: false` below to publish automatically.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build & release (e.g. v7.11.0)'
+        required: true
+
+permissions:
+  contents: write   # create the Release and upload assets
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }} installers
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: 'msi,nsis'
+          - arch: arm64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            bundles: 'nsis'
+    runs-on: ${{ matrix.runner }}
+    env:
+      GITHUB_TOKEN: ${{ github.token }}   # raises the llama.cpp API rate limit in fetch-llama-server
+      RUST_BACKTRACE: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # arm64 runners: setup-bun still falls back to x64 Bun (setup-bun#164), which would
+      # make fetch-llama-server pull the wrong (x64) sidecar. Install native arm64 Bun and
+      # assert process.arch. See build-arm64.yml for the full rationale.
+      - name: Install native ARM64 Bun
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url  = 'https://github.com/oven-sh/bun/releases/latest/download/bun-windows-aarch64.zip'
+          $zip  = Join-Path $env:RUNNER_TEMP 'bun.zip'
+          $dest = Join-Path $env:RUNNER_TEMP 'bun'
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          $bunDir = Join-Path $dest 'bun-windows-aarch64'
+          if (-not (Test-Path (Join-Path $bunDir 'bun.exe'))) { throw "bun.exe not found under $bunDir" }
+          $bunDir | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Verify Bun is native arm64
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $arch = (bun -e "process.stdout.write(process.arch)")
+          if ($arch -ne 'arm64') { throw "Expected native arm64 Bun but process.arch=$arch. Aborting." }
+      - name: Ensure LLVM/Clang (arm64 ring build)
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Command clang -ErrorAction SilentlyContinue)) { choco install llvm --no-progress -y }
+          $llvmBin = Join-Path $env:ProgramFiles 'LLVM\bin'
+          if (Test-Path $llvmBin) {
+            $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+            "LIBCLANG_PATH=$llvmBin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+
+      # x64: native x64 Bun via setup-bun is correct (no workaround, no LLVM needed).
+      - name: Setup Bun (x64)
+        if: matrix.arch == 'x64'
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust (${{ matrix.target }})
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/steno/src-tauri
+          key: ${{ matrix.arch }}
+
+      - name: Install JS dependencies
+        shell: pwsh
+        # committed bun.lock is pinned to the x86 golden baseline (not frozen-consistent).
+        run: bun install --no-frozen-lockfile
+
+      - name: Build installers
+        working-directory: apps/steno
+        shell: pwsh
+        run: bun run tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+      - name: Stage installers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = "apps/steno/src-tauri/target/${{ matrix.target }}/release/bundle"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $found = Get-ChildItem -Path $bundle -Recurse -Include '*.msi','*-setup.exe' -ErrorAction SilentlyContinue
+          if (-not $found) { throw "No installers found under $bundle" }
+          $found | ForEach-Object { Write-Host "staging $($_.Name) ($([math]::Round($_.Length/1MB,1)) MB)"; Copy-Item $_.FullName dist/ }
+
+      - name: Upload installers artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all installers
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Create/update the Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Steno ${{ github.event.inputs.tag || github.ref_name }}
+          draft: true            # set to false to publish automatically
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/**/*.msi
+            dist/**/*-setup.exe
