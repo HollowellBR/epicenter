@@ -1,0 +1,129 @@
+name: Build Steno (Windows ARM64)
+
+# Builds a NATIVE aarch64-pc-windows-msvc Steno installer on a GitHub-hosted
+# Windows-on-ARM runner, so you never need a build toolchain (Visual Studio,
+# LLVM, Rust, Bun) on the Yoga Slim 7x — just download the artifact from the run
+# and run the .exe. The installer is UNSIGNED (SmartScreen "unknown publisher"
+# on first launch); fine for personal use.
+#
+# Triggering:
+#   - Auto: any push to `local-model-stack-gpu` that touches the app or this file.
+#   - Manual: the "Run workflow" (workflow_dispatch) button only appears once this
+#     file also exists on the default branch (main). Until then, push to trigger.
+#
+# Why the explicit Bun step below matters: `oven-sh/setup-bun` still falls back to
+# the x64 Bun on arm64 runners (oven-sh/setup-bun#164). If Bun runs as x64 under
+# emulation, `process.arch` reports "x64" and scripts/fetch-llama-server.ts would
+# fetch the x64 `win-vulkan/cpu` llama-server instead of `win-cpu-arm64` — silently
+# bundling the wrong sidecar into an arm64 app. We install the NATIVE arm64 Bun and
+# hard-assert `process.arch === 'arm64'` before building.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [local-model-stack-gpu]
+    paths:
+      - 'apps/steno/**'
+      - '.github/workflows/build-arm64.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-arm64-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Native ARM64 build + NSIS installer
+    runs-on: windows-11-arm
+    env:
+      # Raises the llama.cpp GitHub API rate limit inside fetch-llama-server.
+      GITHUB_TOKEN: ${{ github.token }}
+      RUST_BACKTRACE: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install native ARM64 Bun
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Native arm64 Bun ships since v1.3.10 as bun-windows-aarch64.zip.
+          $url  = 'https://github.com/oven-sh/bun/releases/latest/download/bun-windows-aarch64.zip'
+          $zip  = Join-Path $env:RUNNER_TEMP 'bun.zip'
+          $dest = Join-Path $env:RUNNER_TEMP 'bun'
+          Write-Host "Downloading native arm64 Bun: $url"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          $bunDir = Join-Path $dest 'bun-windows-aarch64'
+          if (-not (Test-Path (Join-Path $bunDir 'bun.exe'))) {
+            throw "bun.exe not found under $bunDir after extraction"
+          }
+          $bunDir | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Verify Bun is native arm64 (guards the sidecar fetch)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          bun --version
+          $arch = (bun -e "process.stdout.write(process.arch)")
+          Write-Host "bun process.arch = $arch"
+          if ($arch -ne 'arm64') {
+            throw "Expected native arm64 Bun but process.arch=$arch. fetch-llama-server would pull the wrong (x64) llama-server. Aborting."
+          }
+
+      - name: Ensure LLVM/Clang (required to build `ring` on aarch64-windows)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Get-Command clang -ErrorAction SilentlyContinue) {
+            Write-Host "clang already present:"; clang --version
+          } else {
+            Write-Host "clang not found — installing LLVM via Chocolatey"
+            choco install llvm --no-progress -y
+          }
+          $llvmBin = Join-Path $env:ProgramFiles 'LLVM\bin'
+          if (Test-Path $llvmBin) {
+            $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+            "LIBCLANG_PATH=$llvmBin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+
+      - name: Install Rust (aarch64-pc-windows-msvc)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/steno/src-tauri
+
+      - name: Install JS dependencies
+        shell: pwsh
+        run: bun install
+
+      - name: Build app + NSIS installer (native arm64)
+        working-directory: apps/steno
+        shell: pwsh
+        # beforeBuildCommand runs fetch-llama-server (pulls win-cpu-arm64 llama-server,
+        # pinned b9628) + the Vite frontend build; `ort` auto-downloads the aarch64-win
+        # ONNX Runtime during the Rust compile. NSIS only — MSI/WiX isn't supported on ARM64.
+        run: bun run tauri build --target aarch64-pc-windows-msvc --bundles nsis
+
+      - name: Locate installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = 'apps/steno/src-tauri/target/aarch64-pc-windows-msvc/release/bundle/nsis'
+          $exe = Get-ChildItem -Path $dir -Filter '*-setup.exe' -ErrorAction Stop | Select-Object -First 1
+          if (-not $exe) { throw "No NSIS installer found in $dir" }
+          Write-Host "Built installer: $($exe.FullName) ($([math]::Round($exe.Length/1MB,1)) MB)"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: steno-windows-arm64-nsis
+          path: apps/steno/src-tauri/target/aarch64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error

@@ -22,8 +22,10 @@ Refreshed research confirms the 2026-06-22 verdict (6/7 external facts unchanged
 X2 Elite / 32 GB Yoga Slim 7x is purchasable now, ~$1,599). Chosen path:
 
 - **Native `aarch64-pc-windows-msvc`** build (not x64-under-Prism).
-- **Build on-device only** — manual, unsigned releases; no CI. (GitHub `windows-11-arm`
-  runners are now GA and free for this public repo if automated dual-target CI is ever wanted.)
+- **Native `aarch64-pc-windows-msvc`, unsigned, two build paths.** **CI is now the
+  recommended route** (`.github/workflows/build-arm64.yml` on a free, GA `windows-11-arm`
+  runner → download + run the NSIS artifact; **zero build toolchain on the Yoga**). An
+  on-device build still works if preferred. See "Build in CI" below.
 - **ARM transform = cloud-default (Anthropic/Haiku) + bundled CPU-local fallback.**
 - **Additive by construction:** a working native build needs **zero shared-source edits**;
   ARM diverges only via `--target … --bundles nsis` and the per-machine, gitignored `binaries/`.
@@ -69,6 +71,33 @@ these docs.
 
 **Guard reminder:** before any x86 release, run `bun test scripts/x86-baseline-guard.test.ts`
 (green = the x86 + RTX GPU stack is provably untouched).
+
+---
+
+## Build in CI (recommended — keeps the Yoga toolchain-free)
+
+`.github/workflows/build-arm64.yml` builds a **native `aarch64-pc-windows-msvc`** Steno
+installer on a GitHub-hosted **`windows-11-arm`** runner (GA + free for this public repo).
+You download the NSIS `.exe` artifact and just run it on the Yoga — **no Visual Studio /
+LLVM / Rust / Bun on the device**, only the pre-installed WebView2. The installer is
+**unsigned** (SmartScreen "unknown publisher" on first launch); fine for personal use.
+
+**Trigger:** any push to `local-model-stack-gpu` touching `apps/steno/**` (or the workflow
+file) builds automatically; the manual "Run workflow" (`workflow_dispatch`) button only
+appears once this file is also on the default branch (`main`).
+
+**The one non-obvious correctness guard:** `scripts/fetch-llama-server.ts` derives the
+sidecar arch purely from `process.arch`, and `oven-sh/setup-bun` still falls back to **x64**
+Bun on arm64 runners (setup-bun#164). An emulated x64 Bun reports `process.arch = "x64"` → it
+would fetch the x64 `win-vulkan/cpu` llama-server and silently bundle the wrong binary into an
+arm64 app. The workflow therefore installs the **native arm64 Bun** (`bun-windows-aarch64.zip`,
+Bun ≥ 1.3.10) explicitly and **hard-asserts `process.arch === 'arm64'`** before building. It
+also installs Rust (not preinstalled on the runner) and ensures LLVM/Clang (for `ring`); Tauri
+auto-downloads NSIS and `ort` auto-fetches the aarch64-win ONNX Runtime.
+
+Output artifact: `steno-windows-arm64-nsis` → `Steno_<ver>_arm64-setup.exe`. Then on the Yoga:
+run the installer → launch via the tray → configure cloud-transform (Anthropic/Haiku) → run
+the §"On-device smoke test".
 
 ---
 
