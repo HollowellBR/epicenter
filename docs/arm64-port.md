@@ -28,30 +28,42 @@ X2 Elite / 32 GB Yoga Slim 7x is purchasable now, ~$1,599). Chosen path:
 - **Additive by construction:** a working native build needs **zero shared-source edits**;
   ARM diverges only via `--target … --bundles nsis` and the per-machine, gitignored `binaries/`.
 
-**Phase 0 (protect x86) — DONE (2026-07-09).** The x86 + RTX GPU stack is frozen behind a
+**Phase 0 (protect x86) — DONE + COMMITTED (`c681675`, 2026-07-09).** The x86 + RTX GPU stack is frozen behind a
 pinned llama.cpp release (`b9628`), recorded engine/lockfile hashes, a live **97 tok/s**
 Vulkan benchmark-of-record, and a committed invariant-guard test — see
 [`x86-golden-baseline.md`](./x86-golden-baseline.md). Run the guard before any x86 release:
 `bun test scripts/x86-baseline-guard.test.ts`.
 
-### Resume next session (Phase 0 → Phase 1)
+### Status: Phase 0 committed — next is Phase 1 (first ARM build)
 
-1. **Decide commit** — Phase 0 is currently **uncommitted** on `local-model-stack-gpu`.
-   Files: `scripts/fetch-llama-server.ts` (pin), `scripts/x86-golden-baseline.json`,
-   `scripts/capture-x86-baseline.ts`, `scripts/x86-baseline-guard.test.ts`,
-   `docs/x86-golden-baseline.md`, `docs/arm64-port.md` (+ the earlier
-   `specs/20260610T…-local-model-stack-upgrade.md` 7→8-commits fix). Suggested message:
-   `arm64 Phase 0: pin llama.cpp b9628 + x86 golden-baseline guard`.
-2. **Finish the Phase-0 gate (not yet run):** `bun run tauri build` on the RTX
-   workstation → confirm it still emits **MSI + NSIS**, then `bun test
-   scripts/x86-baseline-guard.test.ts` stays green.
-3. **Phase-1 prep unknowns (resolve before/at the first ARM build):**
-   - Does the pinned `ort` (via `transcribe-rs 0.2.1`) ship an `aarch64-pc-windows-msvc`
-     dist? If not → `ORT_STRATEGY=system` with an ABI-matched Microsoft ORT, and **do
-     NOT bump the `ort` pin** (keeps `Cargo.lock` identical to the x86 baseline).
-   - Exclude the ffmpeg-requiring `transcribe` `[[bin]]` from the ARM build (feature/cfg)
-     so `cargo build` can't fail compiling it.
-4. **Phase 1** — run the checklist below on the Yoga Slim 7x: fresh clone, LLVM/Clang +
+**Phase 0 is committed** as `c681675` on `local-model-stack-gpu`
+("arm64 Phase 0: pin llama.cpp b9628 + x86 golden-baseline guard"): the pin, the
+recorded engine/lockfile hashes + live 97 tok/s benchmark, the invariant guard, and
+these docs.
+
+1. **Phase-0 gate — `bun run tauri build` on the RTX workstation: ✅ PASSED (2026-07-09).**
+   The full release build succeeded (exit 0) with the pinned `b9628` fetch integrated,
+   and **both installers emitted** — `bundle/msi/Steno_7.11.0_x64_en-US.msi` (~67 MB)
+   and `bundle/nsis/Steno_7.11.0_x64-setup.exe` (~48 MB). `bun test
+   scripts/x86-baseline-guard.test.ts` is green (**17 pass / 0 fail**). Phase 0 is now
+   fully complete.
+2. **Phase-1 prep unknowns — both RESOLVED (2026-07-09):**
+   - **`ort` ARM64 dist: YES.** The pinned `ort 2.0.0-rc.10` (via
+     `transcribe-rs 0.2.1`) ships a prebuilt `aarch64-pc-windows-msvc` binary —
+     `ort-sys/dist.txt` at tag `v2.0.0-rc.10` lists
+     `none  aarch64-pc-windows-msvc  …/ms@1.22.0/aarch64-pc-windows-msvc.tgz`
+     (ONNX Runtime 1.22.0, CPU). So ort's `download` strategy auto-fetches a
+     Windows-ARM64 ORT — **no `ORT_STRATEGY=system` and no `ort` pin bump**, so
+     `Cargo.lock` stays identical to the x86 baseline (guard stays green).
+   - **`transcribe` `[[bin]]` build risk: NONE.** It invokes ffmpeg only at
+     *runtime* (`Command::new("ffmpeg")` in `src/bin/transcribe.rs`) and compiles
+     from portable crates (`transcribe-rs`, `hound`, `tempfile`, std) — **no
+     build-time ffmpeg dependency**, so `cargo build` can't fail compiling it. It
+     adds no incremental ARM build risk beyond `ort` (resolved above). **No
+     cfg-exclusion is needed** — the additive / zero-shared-source-edits property
+     holds. (Optional trim: `--bin steno` skips building the test-only CLI, but it
+     isn't required for a green build.)
+3. **Phase 1** — run the checklist below on the Yoga Slim 7x: fresh clone, LLVM/Clang +
    VS2022 ARM64 C++ tools, `bun run tauri build --target aarch64-pc-windows-msvc
    --bundles nsis`, cloud-transform (Anthropic) as default.
 
@@ -67,7 +79,7 @@ Vulkan benchmark-of-record, and a committed invariant-guard test — see
 | Rust target `aarch64-pc-windows-msvc` | ✅ Tier 1 w/ host tools (Rust ≥ 1.91) | rustup provides std; builds on-device |
 | Tauri 2 | ✅ | **NSIS** bundler only (`--bundles nsis`); MSI/WiX not ARM64 |
 | WebView2 runtime | ✅ | ARM64 Evergreen pre-installed on Win11 ARM |
-| Transcription — `transcribe-rs` 0.2.1 (`parakeet`) → ONNX Runtime via `ort` | ✅ CPU | `ort` auto-downloads a win-arm64 **CPU** lib; parakeet pulls only portable crates. No NPU/QNN without a source build (not needed). |
+| Transcription — `transcribe-rs` 0.2.1 (`parakeet`) → ONNX Runtime via `ort` | ✅ CPU | **Confirmed:** pinned `ort 2.0.0-rc.10` ships a prebuilt `aarch64-pc-windows-msvc` lib (ORT 1.22.0, CPU) — auto-downloaded, no `ORT_STRATEGY=system`, no pin bump. parakeet pulls only portable crates. No NPU/QNN without a source build (not needed). |
 | `cpal` 0.16 (mic capture) | ✅ | WASAPI loopback has an ARM quirk; plain mic capture is fine |
 | `rdev` 0.5 (global hotkeys) | ✅ | via winapi 0.3.9+; smoke-test it |
 | `enigo` 0.5 (paste-at-cursor) | ✅ | windows 0.62 bindings |

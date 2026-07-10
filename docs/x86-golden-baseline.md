@@ -64,8 +64,10 @@ bun test scripts/x86-baseline-guard.test.ts # confirm green
 - `apps/steno/scripts/capture-x86-baseline.ts` — regenerates the baseline
 - `apps/steno/scripts/x86-baseline-guard.test.ts` — the guard + self-tests
 
-## Remaining Phase 0 gate item
+## Phase 0 gate — COMPLETE (2026-07-09)
 
-A full `bun run tauri build` on this workstation (confirm MSI + NSIS still emit and
-the pinned fetch integrates) — the one heavy step, run when convenient. Everything
-else (pin, hashes, live GPU benchmark, guard green + self-tests bite) is done.
+The full `bun run tauri build` on this workstation ran clean: **MSI + NSIS both emit**
+(`Steno_7.11.0_x64_en-US.msi` ~67 MB, `Steno_7.11.0_x64-setup.exe` ~48 MB) and the
+pinned `b9628` fetch integrated. `bun test scripts/x86-baseline-guard.test.ts` is
+green (**17 pass / 0 fail**). Everything else (pin, hashes, live GPU benchmark, guard +
+self-tests) was already done — **Phase 0 is fully complete.**
