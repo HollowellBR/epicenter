@@ -34,19 +34,31 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const REPO = 'ggml-org/llama.cpp';
-const RELEASE = process.env.LLAMA_CPP_RELEASE ?? 'latest';
+// Pinned to an EXACT upstream llama.cpp release so the bundled engine — and the
+// x86 Vulkan GPU llama-server in particular — can never silently change with no
+// source diff (beforeBuildCommand re-fetches on every build). Bump this
+// deliberately, then re-run `bun run scripts/capture-x86-baseline.ts` to refresh
+// the x86 golden baseline. `LLAMA_CPP_RELEASE` still overrides at runtime.
+export const PINNED_LLAMA_CPP_RELEASE = 'b9628';
+const RELEASE = process.env.LLAMA_CPP_RELEASE ?? PINNED_LLAMA_CPP_RELEASE;
 const FORCE = process.argv.includes('--force');
 
 // macOS ships one universal build (Metal + CPU). Windows/Linux get a GPU build
 // (Vulkan: works on NVIDIA/AMD/Intel) plus a plain CPU build as a safe fallback.
 // Default GPU+CPU variant list for Windows/Linux (macOS is handled separately).
-function defaultNonDarwinVariants(): string[] {
+// Pure + exported so the x86 invariant-guard test can assert BOTH branches
+// directly (x64 keeps the Vulkan GPU build; win-arm64 gets cpu-only) without
+// re-implementing the logic. Callers pass process.platform/process.arch.
+export function defaultNonDarwinVariants(
+	platform: string,
+	arch: string,
+): string[] {
 	// Windows on ARM64 (Snapdragon / Adreno): llama.cpp publishes NO win-vulkan
 	// arm64 asset, and Vulkan on Adreno/Windows is broken anyway, so ship the
 	// reliable CPU build. (The arm64 GPU build is `opencl-adreno`, but it's
 	// experimental and often loses to CPU on Snapdragon X — opt in explicitly via
 	// LLAMA_CPP_VARIANT=opencl-adreno,cpu if you want to try it.)
-	if (process.platform === 'win32' && process.arch === 'arm64') return ['cpu'];
+	if (platform === 'win32' && arch === 'arm64') return ['cpu'];
 	// Windows / Linux x64: Vulkan GPU build (NVIDIA/AMD/Intel) + CPU fallback.
 	return ['vulkan', 'cpu'];
 }
@@ -56,7 +68,7 @@ const VARIANTS: string[] =
 		? ['metal']
 		: (process.env.LLAMA_CPP_VARIANT?.split(',')
 				.map((s) => s.trim())
-				.filter(Boolean) ?? defaultNonDarwinVariants());
+				.filter(Boolean) ?? defaultNonDarwinVariants(process.platform, process.arch));
 
 const BINARIES_DIR = resolve(import.meta.dir, '../src-tauri/binaries');
 const isWindows = process.platform === 'win32';
@@ -244,7 +256,12 @@ async function main() {
 	}
 }
 
-main().catch((err) => {
-	console.error(`[fetch-llama-server] ${err.message ?? err}`);
-	process.exit(1);
-});
+// Only run when invoked directly as a script (not when imported — the x86 guard
+// test and baseline-capture tooling pull in the pure helpers above and must not
+// trigger a network fetch / process.exit on import).
+if (import.meta.main) {
+	main().catch((err) => {
+		console.error(`[fetch-llama-server] ${err.message ?? err}`);
+		process.exit(1);
+	});
+}

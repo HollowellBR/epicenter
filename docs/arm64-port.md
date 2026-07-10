@@ -16,6 +16,48 @@ CPU-only, but is slower (see Performance).
 > for the cloud-transform path. The risks are all *configuration/toolchain*, not *capability* —
 > nothing in the stack is fundamentally blocked on Windows ARM64.
 
+## Decisions & status (2026-07-09)
+
+Refreshed research confirms the 2026-06-22 verdict (6/7 external facts unchanged; the
+X2 Elite / 32 GB Yoga Slim 7x is purchasable now, ~$1,599). Chosen path:
+
+- **Native `aarch64-pc-windows-msvc`** build (not x64-under-Prism).
+- **Build on-device only** — manual, unsigned releases; no CI. (GitHub `windows-11-arm`
+  runners are now GA and free for this public repo if automated dual-target CI is ever wanted.)
+- **ARM transform = cloud-default (Anthropic/Haiku) + bundled CPU-local fallback.**
+- **Additive by construction:** a working native build needs **zero shared-source edits**;
+  ARM diverges only via `--target … --bundles nsis` and the per-machine, gitignored `binaries/`.
+
+**Phase 0 (protect x86) — DONE (2026-07-09).** The x86 + RTX GPU stack is frozen behind a
+pinned llama.cpp release (`b9628`), recorded engine/lockfile hashes, a live **97 tok/s**
+Vulkan benchmark-of-record, and a committed invariant-guard test — see
+[`x86-golden-baseline.md`](./x86-golden-baseline.md). Run the guard before any x86 release:
+`bun test scripts/x86-baseline-guard.test.ts`.
+
+### Resume next session (Phase 0 → Phase 1)
+
+1. **Decide commit** — Phase 0 is currently **uncommitted** on `local-model-stack-gpu`.
+   Files: `scripts/fetch-llama-server.ts` (pin), `scripts/x86-golden-baseline.json`,
+   `scripts/capture-x86-baseline.ts`, `scripts/x86-baseline-guard.test.ts`,
+   `docs/x86-golden-baseline.md`, `docs/arm64-port.md` (+ the earlier
+   `specs/20260610T…-local-model-stack-upgrade.md` 7→8-commits fix). Suggested message:
+   `arm64 Phase 0: pin llama.cpp b9628 + x86 golden-baseline guard`.
+2. **Finish the Phase-0 gate (not yet run):** `bun run tauri build` on the RTX
+   workstation → confirm it still emits **MSI + NSIS**, then `bun test
+   scripts/x86-baseline-guard.test.ts` stays green.
+3. **Phase-1 prep unknowns (resolve before/at the first ARM build):**
+   - Does the pinned `ort` (via `transcribe-rs 0.2.1`) ship an `aarch64-pc-windows-msvc`
+     dist? If not → `ORT_STRATEGY=system` with an ABI-matched Microsoft ORT, and **do
+     NOT bump the `ort` pin** (keeps `Cargo.lock` identical to the x86 baseline).
+   - Exclude the ffmpeg-requiring `transcribe` `[[bin]]` from the ARM build (feature/cfg)
+     so `cargo build` can't fail compiling it.
+4. **Phase 1** — run the checklist below on the Yoga Slim 7x: fresh clone, LLVM/Clang +
+   VS2022 ARM64 C++ tools, `bun run tauri build --target aarch64-pc-windows-msvc
+   --bundles nsis`, cloud-transform (Anthropic) as default.
+
+**Guard reminder:** before any x86 release, run `bun test scripts/x86-baseline-guard.test.ts`
+(green = the x86 + RTX GPU stack is provably untouched).
+
 ---
 
 ## Component status
@@ -50,8 +92,8 @@ runtime blocker — install LLVM and it compiles.
 
 ## Porting checklist (run when the machine lands)
 
-Do this **on the device** (or on a Windows-ARM64 CI runner — GitHub offers them in public preview)
-to avoid cross-compile header pain. Note the fetch script keys off `process.arch`, so it picks the
+Do this **on the device** (or on a GitHub `windows-11-arm` CI runner — now GA, free 4-vCPU for
+public repos) to avoid cross-compile header pain. Note the fetch script keys off `process.arch`, so it picks the
 arm64 assets correctly only when run on the ARM64 machine.
 
 1. **Toolchain**
