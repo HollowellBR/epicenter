@@ -9,9 +9,12 @@
 	"author": "",
 	"workspaces": {
 		"packages": [
-			"apps/*",
-			"packages/*",
-			"examples/*"
+			"apps/steno",
+			"packages/config",
+			"packages/constants",
+			"packages/shared",
+			"packages/svelte-utils",
+			"packages/ui"
 		],
 		"catalog": {
 			"@types/node": "^22.18.10",
